@@ -1,0 +1,147 @@
+// Copyright (c) 2019 Timo Savola. All rights reserved.
+// Use of this source code is governed by a BSD-style
+// license that can be found in the LICENSE file.
+
+use std::any::Any;
+use std::rc::Rc;
+
+use super::eval::{is_truthful, Env, Fun};
+
+pub fn register_all(env: &mut Env) {
+    env.register("+", &ADD);
+    env.register("-", &SUB);
+    env.register("*", &MUL);
+    env.register("/", &DIV);
+    env.register("identity", &IDENTITY);
+    env.register("not", &NOT);
+}
+
+pub static ADD: Add = Add {};
+pub static SUB: Sub = Sub {};
+pub static MUL: Mul = Mul {};
+pub static DIV: Div = Div {};
+pub static IDENTITY: Identity = Identity {};
+pub static NOT: Not = Not {};
+
+pub struct Add;
+pub struct Sub;
+pub struct Mul;
+pub struct Div;
+pub struct Identity;
+pub struct Not;
+
+impl Fun for Add {
+    fn invoke(&self, args: Vec<Rc<dyn Any>>) -> Option<Rc<dyn Any>> {
+        let mut res: i64 = 0;
+
+        for x in args {
+            if let Some(n) = x.downcast_ref::<i64>() {
+                res += n;
+            } else {
+                return None;
+            }
+        }
+
+        Some(Rc::new(res))
+    }
+}
+
+impl Fun for Sub {
+    fn invoke(&self, args: Vec<Rc<dyn Any>>) -> Option<Rc<dyn Any>> {
+        if args.len() == 0 {
+            Some(Rc::new(0 as i64))
+        } else {
+            let mut res = if let Some(n) = args[0].downcast_ref::<i64>() {
+                *n
+            } else {
+                return None;
+            };
+
+            if args.len() == 1 {
+                res = -res
+            } else {
+                for x in &args[1..] {
+                    if let Some(n) = x.downcast_ref::<i64>() {
+                        res -= n;
+                    } else {
+                        return None;
+                    }
+                }
+            }
+
+            Some(Rc::new(res))
+        }
+    }
+}
+
+impl Fun for Mul {
+    fn invoke(&self, args: Vec<Rc<dyn Any>>) -> Option<Rc<dyn Any>> {
+        if args.len() == 0 {
+            Some(Rc::new(0 as i64))
+        } else {
+            let mut res = if let Some(n) = args[0].downcast_ref::<i64>() {
+                *n
+            } else {
+                return None;
+            };
+
+            for x in &args[1..] {
+                if let Some(n) = x.downcast_ref::<i64>() {
+                    res *= n;
+                } else {
+                    return None;
+                }
+            }
+
+            Some(Rc::new(res))
+        }
+    }
+}
+
+impl Fun for Div {
+    fn invoke(&self, args: Vec<Rc<dyn Any>>) -> Option<Rc<dyn Any>> {
+        if args.len() == 0 {
+            Some(Rc::new(0 as i64))
+        } else {
+            let mut res = if let Some(n) = args[args.len() - 1].downcast_ref::<i64>() {
+                *n
+            } else {
+                return None;
+            };
+
+            for i in 2..args.len() + 1 {
+                if res == 0 {
+                    return None;
+                }
+
+                if let Some(n) = args[args.len() - i].downcast_ref::<i64>() {
+                    res = *n / res;
+                } else {
+                    return None;
+                }
+            }
+
+            Some(Rc::new(res))
+        }
+    }
+}
+
+impl Fun for Identity {
+    fn invoke(&self, args: Vec<Rc<dyn Any>>) -> Option<Rc<dyn Any>> {
+        if args.len() == 1 {
+            Some(args[0].clone())
+        } else {
+            None
+        }
+    }
+}
+
+impl Fun for Not {
+    fn invoke(&self, args: Vec<Rc<dyn Any>>) -> Option<Rc<dyn Any>> {
+        if args.len() == 1 {
+            Some(Rc::new(!is_truthful(args[0].clone())))
+        } else {
+            None
+        }
+    }
+}
