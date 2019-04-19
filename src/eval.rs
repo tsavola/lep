@@ -14,7 +14,7 @@ use super::parse::Pair;
 
 static UNDERSCORE: Expr = Expr::Atom("_");
 
-// Ref is a native object stored in an Rc<dyn Any>.
+/// Ref is a native object stored in an Rc<dyn Any>.
 pub struct Ref {
     name: &'static str,
     form: bool, // Internal form or extension function?
@@ -35,12 +35,12 @@ struct Form {
     f: fn(&Expr, &mut Frame) -> Option<Rc<dyn Any>>,
 }
 
-// Fun is an extension function object.
+/// Fun is an extension function object.
 pub trait Fun {
     fn invoke(&self, args: Vec<Rc<dyn Any>>) -> Option<Rc<dyn Any>>;
 }
 
-// FunMut is an extension function object with side-effects.
+/// FunMut is an extension function object with side-effects.
 pub trait FunMut {
     fn invoke(&mut self, args: Vec<Rc<dyn Any>>) -> Option<Rc<dyn Any>>;
 }
@@ -151,8 +151,8 @@ struct Frame<'m, 'f> {
     state: Rc<StateLayer>,
 }
 
-// eval_stmt parses and evaluates a statement.  A derived state with the result
-// value is returned.
+/// Parse and evaluate a statement.  A derived state with the result value is
+/// returned.
 pub fn eval_stmt<'m>(s: &str, state: State, env: &'m mut Env) -> Option<State> {
     if s.trim().len() == 0 {
         return Some(State {
