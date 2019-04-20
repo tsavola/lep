@@ -178,13 +178,13 @@ new one:
 let mut state = lep::State::new();
 loop {
     match lep::eval_stmt(read_line(), state.clone(), &mut env) {
-		Ok(new_state) => {
-			// Print result here.
-			state = new_state;
-		}
-		Err(msg) {
-			println!("error: {}", msg);
-		}
+        Ok(new_state) => {
+            // Print result here.
+            state = new_state;
+        }
+        Err(msg) {
+            println!("error: {}", msg);
+        }
     }
 }
 ```
