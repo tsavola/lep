@@ -7,6 +7,11 @@ use std::rc::Rc;
 
 use super::eval::{is_truthful, Env, Fun};
 
+fn expected_i64() -> Result<Rc<dyn Any>, String> {
+    Err("arithmetic function expects i64".to_string())
+}
+
+/// Register all optional built-in functions.
 pub fn register_all(env: &mut Env) {
     env.register("+", &ADD);
     env.register("-", &SUB);
@@ -31,30 +36,30 @@ pub struct Identity;
 pub struct Not;
 
 impl Fun for Add {
-    fn invoke(&self, args: Vec<Rc<dyn Any>>) -> Option<Rc<dyn Any>> {
+    fn invoke(&self, args: Vec<Rc<dyn Any>>) -> Result<Rc<dyn Any>, String> {
         let mut res: i64 = 0;
 
         for x in args {
             if let Some(n) = x.downcast_ref::<i64>() {
                 res += n;
             } else {
-                return None;
+                return expected_i64();
             }
         }
 
-        Some(Rc::new(res))
+        Ok(Rc::new(res))
     }
 }
 
 impl Fun for Sub {
-    fn invoke(&self, args: Vec<Rc<dyn Any>>) -> Option<Rc<dyn Any>> {
+    fn invoke(&self, args: Vec<Rc<dyn Any>>) -> Result<Rc<dyn Any>, String> {
         if args.len() == 0 {
-            Some(Rc::new(0 as i64))
+            Ok(Rc::new(0 as i64))
         } else {
             let mut res = if let Some(n) = args[0].downcast_ref::<i64>() {
                 *n
             } else {
-                return None;
+                return expected_i64();
             };
 
             if args.len() == 1 {
@@ -64,84 +69,84 @@ impl Fun for Sub {
                     if let Some(n) = x.downcast_ref::<i64>() {
                         res -= n;
                     } else {
-                        return None;
+                        return expected_i64();
                     }
                 }
             }
 
-            Some(Rc::new(res))
+            Ok(Rc::new(res))
         }
     }
 }
 
 impl Fun for Mul {
-    fn invoke(&self, args: Vec<Rc<dyn Any>>) -> Option<Rc<dyn Any>> {
+    fn invoke(&self, args: Vec<Rc<dyn Any>>) -> Result<Rc<dyn Any>, String> {
         if args.len() == 0 {
-            Some(Rc::new(0 as i64))
+            Ok(Rc::new(0 as i64))
         } else {
             let mut res = if let Some(n) = args[0].downcast_ref::<i64>() {
                 *n
             } else {
-                return None;
+                return expected_i64();
             };
 
             for x in &args[1..] {
                 if let Some(n) = x.downcast_ref::<i64>() {
                     res *= n;
                 } else {
-                    return None;
+                    return expected_i64();
                 }
             }
 
-            Some(Rc::new(res))
+            Ok(Rc::new(res))
         }
     }
 }
 
 impl Fun for Div {
-    fn invoke(&self, args: Vec<Rc<dyn Any>>) -> Option<Rc<dyn Any>> {
+    fn invoke(&self, args: Vec<Rc<dyn Any>>) -> Result<Rc<dyn Any>, String> {
         if args.len() == 0 {
-            Some(Rc::new(0 as i64))
+            Ok(Rc::new(0 as i64))
         } else {
             let mut res = if let Some(n) = args[args.len() - 1].downcast_ref::<i64>() {
                 *n
             } else {
-                return None;
+                return expected_i64();
             };
 
             for i in 2..args.len() + 1 {
                 if res == 0 {
-                    return None;
+                    return expected_i64();
                 }
 
                 if let Some(n) = args[args.len() - i].downcast_ref::<i64>() {
                     res = *n / res;
                 } else {
-                    return None;
+                    return expected_i64();
                 }
             }
 
-            Some(Rc::new(res))
+            Ok(Rc::new(res))
         }
     }
 }
 
 impl Fun for Identity {
-    fn invoke(&self, args: Vec<Rc<dyn Any>>) -> Option<Rc<dyn Any>> {
+    fn invoke(&self, args: Vec<Rc<dyn Any>>) -> Result<Rc<dyn Any>, String> {
         if args.len() == 1 {
-            Some(args[0].clone())
+            Ok(args[0].clone())
         } else {
-            None
+            return expected_i64();
         }
     }
 }
 
 impl Fun for Not {
-    fn invoke(&self, args: Vec<Rc<dyn Any>>) -> Option<Rc<dyn Any>> {
+    fn invoke(&self, args: Vec<Rc<dyn Any>>) -> Result<Rc<dyn Any>, String> {
         if args.len() == 1 {
-            Some(Rc::new(!is_truthful(args[0].clone())))
+            Ok(Rc::new(!is_truthful(args[0].clone())))
         } else {
-            None
+            return expected_i64();
         }
     }
 }

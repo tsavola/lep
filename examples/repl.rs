@@ -3,6 +3,7 @@
 // license that can be found in the LICENSE file.
 
 use std::any::Any;
+use std::process::exit;
 use std::rc::Rc;
 use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -16,12 +17,12 @@ struct Sequence {
 }
 
 impl FunMut for Sequence {
-    fn invoke(&mut self, args: Vec<Rc<dyn Any>>) -> Option<Rc<dyn Any>> {
+    fn invoke(&mut self, args: Vec<Rc<dyn Any>>) -> Result<Rc<dyn Any>, String> {
         if args.len() == 0 {
             self.n += 1;
-            Some(Rc::new(self.n))
+            Ok(Rc::new(self.n))
         } else {
-            None
+            Err("sequence: too many arguments".to_string())
         }
     }
 }
@@ -29,14 +30,15 @@ impl FunMut for Sequence {
 struct Time;
 
 impl Fun for Time {
-    fn invoke(&self, args: Vec<Rc<dyn Any>>) -> Option<Rc<dyn Any>> {
+    fn invoke(&self, args: Vec<Rc<dyn Any>>) -> Result<Rc<dyn Any>, String> {
         if args.is_empty() {
-            if let Ok(n) = SystemTime::now().duration_since(UNIX_EPOCH) {
-                return Some(Rc::new(n.as_secs() as i64));
+            match SystemTime::now().duration_since(UNIX_EPOCH) {
+                Ok(n) => Ok(Rc::new(n.as_secs() as i64)),
+                Err(e) => Err(format!("time: {}", e)),
             }
+        } else {
+            Err("time: too many arguments".to_string())
         }
-
-        None
     }
 }
 
@@ -59,39 +61,46 @@ fn main() {
             Ok(line) => {
                 rl.add_history_entry(line.as_ref());
 
-                if let Some(res) = eval_stmt(&line, state.clone(), &mut env) {
-                    if let Some(repr) = stringify(res.result_value.clone()) {
-                        if repr.is_empty() {
-                            if res.result_name == "_" {
-                                prefix = "".to_string();
-                            } else if !res.result_name.is_empty() {
-                                println!("{} = ()", res.result_name);
+                match eval_stmt(&line, state.clone(), &mut env) {
+                    Ok(res) => {
+                        if let Some(repr) = stringify(res.result_value.clone()) {
+                            if repr.is_empty() {
+                                if res.result_name == "_" {
+                                    prefix = "".to_string();
+                                } else if !res.result_name.is_empty() {
+                                    println!("{} = ()", res.result_name);
+                                }
+                            } else {
+                                if res.result_name == "_" {
+                                    prefix = repr + " ";
+                                } else if !res.result_name.is_empty() {
+                                    println!("{} = {}", res.result_name, repr);
+                                }
                             }
                         } else {
                             if res.result_name == "_" {
-                                prefix = repr + " ";
+                                prefix = "? ".to_string();
                             } else if !res.result_name.is_empty() {
-                                println!("{} = {}", res.result_name, repr);
+                                println!("{} = ?", res.result_name);
                             }
                         }
-                    } else {
-                        if res.result_name == "_" {
-                            prefix = "? ".to_string();
-                        } else if !res.result_name.is_empty() {
-                            println!("{} = ?", res.result_name);
-                        }
+
+                        state = res;
                     }
 
-                    state = res;
-                } else {
-                    println!("evaluation error");
+                    Err(msg) => {
+                        println!("error: {}", msg);
+                    }
                 }
             }
+
             Err(ReadlineError::Eof) => {
                 break;
             }
+
             Err(x) => {
                 println!("read error: {}", x);
+                exit(1);
             }
         }
     }

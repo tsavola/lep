@@ -11,6 +11,9 @@ mod parse;
 
 pub use eval::{eval_stmt, Env, Fun, FunMut, Ref, State};
 
+/// Stringify (), bool, i64, String or Ref.  () is represented by the empty
+/// string.  String will be quoted.  None is returned if the type is not
+/// supported.
 pub fn stringify(x: Rc<dyn Any>) -> Option<String> {
     if let Some(_) = x.downcast_ref::<()>() {
         return Some("".to_string());

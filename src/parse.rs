@@ -10,39 +10,50 @@ pub enum Expr<'a> {
 
 pub struct Pair<'a>(pub Expr<'a>, pub Expr<'a>);
 
-pub fn parse_stmt(s: &str) -> Option<Expr> {
+pub fn parse_stmt(s: &str) -> Result<Expr, String> {
     let s = s.trim_start();
+
     if s.starts_with("(") {
         parse(s)
     } else {
-        let (x, n) = parse_tail(s, false);
-        if s[s.len() - n..].trim().len() == 0 {
-            x
-        } else {
-            None
+        match parse_tail(s, false) {
+            Ok((expr, n)) => {
+                if s[s.len() - n..].trim().len() == 0 {
+                    Ok(expr)
+                } else {
+                    Err("statement parse error".to_string())
+                }
+            }
+
+            Err(msg) => Err(msg),
         }
     }
 }
 
-fn parse(s: &str) -> Option<Expr> {
-    let (x, n) = parse_expr(s);
-    if s[s.len() - n..].trim().len() == 0 {
-        x
-    } else {
-        None
+fn parse(s: &str) -> Result<Expr, String> {
+    match parse_expr(s) {
+        Ok((expr, n)) => {
+            if s[s.len() - n..].trim().len() == 0 {
+                Ok(expr)
+            } else {
+                Err("expression parse error".to_string())
+            }
+        }
+
+        Err(msg) => Err(msg),
     }
 }
 
-fn parse_expr(s: &str) -> (Option<Expr>, usize) {
+fn parse_expr(s: &str) -> Result<(Expr, usize), String> {
     let s = s.trim_start();
-    match s.chars().nth(0) {
-        Some('(') => parse_tail(&s[1..], true),
-        Some(_) => parse_atom(s),
-        None => (None, s.len()),
+
+    match s.chars().nth(0).unwrap() {
+        '(' => parse_tail(&s[1..], true),
+        _ => parse_atom(s),
     }
 }
 
-fn parse_atom(s: &str) -> (Option<Expr>, usize) {
+fn parse_atom(s: &str) -> Result<(Expr, usize), String> {
     if s.chars().nth(0).unwrap() == '"' {
         return parse_string(s);
     }
@@ -51,20 +62,20 @@ fn parse_atom(s: &str) -> (Option<Expr>, usize) {
 
     for c in s.chars() {
         if c == ')' || c.is_whitespace() {
-            return (Some(Expr::Atom(&s[..offset])), s.len() - offset);
+            return Ok((Expr::Atom(&s[..offset]), s.len() - offset));
         }
 
         if c == '(' {
-            return (None, s.len());
+            return Err("opening paren inside atom".to_string());
         }
 
         offset += c.len_utf8();
     }
 
-    (Some(Expr::Atom(s)), 0)
+    Ok((Expr::Atom(s), 0))
 }
 
-fn parse_string(s: &str) -> (Option<Expr>, usize) {
+fn parse_string(s: &str) -> Result<(Expr, usize), String> {
     let mut it = s.chars().enumerate();
     it.next(); // Skip first quote.
 
@@ -89,45 +100,46 @@ fn parse_string(s: &str) -> (Option<Expr>, usize) {
 
                 if let Some(c) = s.chars().nth(i) {
                     if !(c == ')' || c.is_whitespace()) {
-                        return (None, s.len());
+                        return Err("garbage after string literal".to_string());
                     }
                 }
 
-                return (Some(Expr::Atom(&s[..offset])), s.len() - offset);
+                return Ok((Expr::Atom(&s[..offset]), s.len() - offset));
             }
 
             _ => {}
         }
     }
 
-    dbg!(s);
-    (None, s.len())
+    Err("string literal has no closing quote".to_string())
 }
 
-fn parse_tail(s: &str, paren: bool) -> (Option<Expr>, usize) {
+fn parse_tail(s: &str, paren: bool) -> Result<(Expr, usize), String> {
     let s = s.trim_start();
+
     if let Some(c) = s.chars().nth(0) {
-        match c {
-            ')' => (Some(Expr::Nil), s.len() - 1),
-            _ => {
-                let (car, n) = parse_expr(s);
-                match car {
-                    Some(x) => {
-                        let (cdr, n) = parse_tail(&s[s.len() - n..], paren);
-                        if let Some(y) = cdr {
-                            (Some(Expr::Pair(Box::new(Pair(x, y)))), n)
-                        } else {
-                            (None, n)
-                        }
-                    }
-                    None => (None, n),
+        if c == ')' {
+            if let Some(c) = s.chars().nth(1) {
+                if !(c == ')' || c.is_whitespace()) {
+                    return Err("garbage after closing paren".to_string());
                 }
             }
+
+            return Ok((Expr::Nil, s.len() - 1));
+        }
+
+        match parse_expr(s) {
+            Ok((car, n)) => match parse_tail(&s[s.len() - n..], paren) {
+                Ok((cdr, n)) => Ok((Expr::Pair(Box::new(Pair(car, cdr))), n)),
+                Err(msg) => Err(msg),
+            },
+
+            Err(msg) => Err(msg),
         }
     } else if paren {
-        (None, s.len())
+        Err("expression has no closing paren".to_string())
     } else {
-        (Some(Expr::Nil), 0)
+        Ok((Expr::Nil, 0))
     }
 }
 
@@ -142,10 +154,10 @@ mod tests {
             _ => assert!(false),
         }
 
-        assert!(parse("foo bar").is_none());
-        assert!(parse("foo)").is_none());
-        assert!(parse("foo(").is_none());
-        assert!(parse("foo ()").is_none());
+        assert!(parse("foo bar").is_err());
+        assert!(parse("foo)").is_err());
+        assert!(parse("foo(").is_err());
+        assert!(parse("foo ()").is_err());
     }
 
     #[test]
@@ -160,11 +172,11 @@ mod tests {
             _ => assert!(false),
         }
 
-        assert!(parse(r#""foo" bar"#).is_none());
-        assert!(parse(r#""foo"bar"#).is_none());
-        assert!(parse(r#""foo""bar""#).is_none());
-        assert!(parse(r#""foo")"#).is_none());
-        assert!(parse(r#""foo" ()"#).is_none());
+        assert!(parse(r#""foo" bar"#).is_err());
+        assert!(parse(r#""foo"bar"#).is_err());
+        assert!(parse(r#""foo""bar""#).is_err());
+        assert!(parse(r#""foo")"#).is_err());
+        assert!(parse(r#""foo" ()"#).is_err());
 
         match parse(r#""foo\n""#).unwrap() {
             Expr::Atom(s) => assert_eq!(s, r#""foo\n""#),
@@ -266,5 +278,9 @@ mod tests {
             }
             _ => assert!(false),
         }
+
+        parse_stmt(r#"foo()"#).is_err();
+        parse_stmt(r#"(foo)()"#).is_err();
+        parse_stmt(r#"(foo)bar"#).is_err();
     }
 }

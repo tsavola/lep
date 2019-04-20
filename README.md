@@ -1,8 +1,8 @@
 # Lep
 
-Mini language for interactive consoles, featuring small code and memory
-footprint.  It's essentially a sugarcoated Lisp subset, approximating shell
-syntax, influenced by Python.
+Mini language for interactive consoles, featuring small code footprint.  It's
+essentially a sugarcoated Lisp subset, approximating shell syntax, influenced
+by Python.
 
 The core language is functional/declarative.  It's not Turing complete:
 function creation, looping and recursion are not supported.  Variable binding
@@ -11,9 +11,9 @@ introduce side-effects.
 
 The idea is that the Rust program (which embeds Lep) implements extension
 functions, effectively creating a domain-specific query or administration
-language.  The host program is also responsible for setting up the
-read-eval-print-loop (REPL) which calls Lep (for parsing and evaluation), thus
-choosing where the input is read from and what gets printed.
+language.  The host program is also responsible for setting up the REPL
+(read-eval-print-loop), thus choosing where the input is read from and what
+gets printed.
 
 
 ## Syntax
@@ -25,8 +25,8 @@ Statement syntax (both parts are optional):
 
     !variable expression
 
-The variable name is any character string excluding whitespace, `(` and `)`
-characters.  The expression is an otherwise usual
+The variable name is any character string excluding whitespace, `(` and `)`.
+The expression is an otherwise usual
 [S-expression](https://en.wikipedia.org/wiki/S-expression), but the outermost
 parentheses may be omitted in some cases (when the first term is an atom).
 
@@ -68,24 +68,23 @@ The statement syntax is optimized for two-step usage:
 An expression without outer parentheses evaluates a variable/literal or invokes
 a function depending on the type of the first term.  Therefore it's not
 possible to directly get a reference to a function.  However, the built-in
-identity function can be used to work around that:
+`identity` function can be used to work around that:
 
     >> identity echo
     <function echo>
     >> _ "bar"
     bar
 
-Some expressions cannot be written without outer parentheses; the first one of
-these statements doesn't work, but the second one does:
+Some expressions cannot be written without outer parentheses:
 
     >> (choose-operator) arg
-    parse error
+    error
     >> ((choose-operator) arg)
-    42
+    ok
 
 A statement consisting only of whitespace yields nil and leaves the variables
 unchanged.  When the user inputs an empty line, the embedder program doesn't
-need to evaluate it, and may display something else.
+need to evaluate it, and may do something else instead.
 
 
 ## Functions
@@ -97,7 +96,7 @@ Special forms are implemented internally:
 (or arg1 arg2 ...)
 ```
 
-Built-in functions (optional):
+Optional built-in functions:
 
 ```scheme
 (+ arg1 arg2 ...)
@@ -130,7 +129,7 @@ impl lep::Fun for Println {
 Lep has a dynamic and open-ended type system.  Type `Rc<dyn Any>` is used to
 pass immutable values to and from functions.  Extension functions may return
 and accept custom types, but they cannot be used with built-in arithmetic
-functions, and logic functions will treat all values as truthful.
+functions, and logical functions will treat their values as truthful.
 
 Fully supported types:
 
@@ -165,8 +164,14 @@ new one:
 ```rust
 let mut state = lep::State::new();
 loop {
-    if let Some(new_state) = lep::eval_stmt(read_line(), state.clone(), &mut env) {
-        state = new_state;
+    match lep::eval_stmt(read_line(), state.clone(), &mut env) {
+		Ok(new_state) => {
+			// Print result here.
+			state = new_state;
+		}
+		Err(msg) {
+			println!("error: {}", msg);
+		}
     }
 }
 ```

@@ -32,17 +32,17 @@ impl ToString for Ref {
 
 struct Form {
     value: Rc<dyn Any>,
-    f: fn(&Expr, &mut Frame) -> Option<Rc<dyn Any>>,
+    f: fn(&Expr, &mut Frame) -> Result<Rc<dyn Any>, String>,
 }
 
 /// Fun is an extension function object.
 pub trait Fun {
-    fn invoke(&self, args: Vec<Rc<dyn Any>>) -> Option<Rc<dyn Any>>;
+    fn invoke(&self, args: Vec<Rc<dyn Any>>) -> Result<Rc<dyn Any>, String>;
 }
 
 /// FunMut is an extension function object with side-effects.
 pub trait FunMut {
-    fn invoke(&mut self, args: Vec<Rc<dyn Any>>) -> Option<Rc<dyn Any>>;
+    fn invoke(&mut self, args: Vec<Rc<dyn Any>>) -> Result<Rc<dyn Any>, String>;
 }
 
 struct ExtFun<'f> {
@@ -153,93 +153,93 @@ struct Frame<'m, 'f> {
 
 /// Parse and evaluate a statement.  A derived state with the result value is
 /// returned.
-pub fn eval_stmt<'m>(s: &str, state: State, env: &'m mut Env) -> Option<State> {
+pub fn eval_stmt<'m>(s: &str, state: State, env: &'m mut Env) -> Result<State, String> {
     if s.trim().len() == 0 {
-        return Some(State {
+        return Ok(State {
             inner: state.inner,
             result_name: "".to_string(),
             result_value: Rc::new(()),
         });
     }
 
-    if let Some(ref expr) = parse_stmt(s) {
-        let mut frame = Frame {
-            env: env,
-            state: state.inner.clone(),
-        };
+    match parse_stmt(s) {
+        Ok(ref expr) => {
+            let mut frame = Frame {
+                env: env,
+                state: state.inner.clone(),
+            };
 
-        let mut expr = expr;
-        let mut name = "_".to_string();
+            let mut expr = expr;
+            let mut name = "_".to_string();
 
-        if let Expr::Pair(p) = expr {
-            if let Expr::Atom(s) = p.0 {
-                if s.starts_with("!") {
-                    if s.len() == 1 {
-                        name = choose_name(&frame);
-                    } else {
-                        name = s[1..].to_string();
-                    }
-
-                    match p.1 {
-                        Expr::Pair(_) => {
-                            expr = &p.1;
+            if let Expr::Pair(p) = expr {
+                if let Expr::Atom(s) = p.0 {
+                    if s.starts_with("!") {
+                        if s.len() == 1 {
+                            name = choose_name(&frame);
+                        } else {
+                            name = s[1..].to_string();
                         }
-                        Expr::Atom(_) => {
-                            return None;
-                        }
-                        Expr::Nil => {
-                            expr = &UNDERSCORE;
+
+                        expr = match p.1 {
+                            Expr::Pair(_) => &p.1,
+                            Expr::Atom(_) => panic!(),
+                            Expr::Nil => &UNDERSCORE,
                         }
                     }
                 }
             }
-        }
 
-        if let Some(value) = eval_stmt_expr(&expr, &mut frame, !s.trim_start().starts_with("(")) {
-            let mut new = Rc::new(StateLayer {
-                parent: state.inner.parent.clone(), // Skip innermost layer with old _ value.
-                name: name.to_string(),
-                value: value.clone(),
-            });
+            match eval_stmt_expr(&expr, &mut frame, !s.trim_start().starts_with("(")) {
+                Ok(value) => {
+                    let mut new = Rc::new(StateLayer {
+                        parent: state.inner.parent.clone(), // Skip innermost layer with old _ value.
+                        name: name.to_string(),
+                        value: value.clone(),
+                    });
 
-            if name != "_" {
-                // Bubble old _ value up to innermost new layer.
-                new = Rc::new(StateLayer {
-                    parent: Some(new),
-                    name: "_".to_string(),
-                    value: state.inner.value.clone(),
-                });
+                    if name != "_" {
+                        // Bubble old _ value up to innermost new layer.
+                        new = Rc::new(StateLayer {
+                            parent: Some(new),
+                            name: "_".to_string(),
+                            value: state.inner.value.clone(),
+                        });
+                    }
+
+                    return Ok(State {
+                        inner: new,
+                        result_name: name.to_string(),
+                        result_value: value.clone(),
+                    });
+                }
+
+                Err(msg) => Err(msg),
             }
-
-            return Some(State {
-                inner: new,
-                result_name: name.to_string(),
-                result_value: value.clone(),
-            });
         }
-    }
 
-    None
+        Err(msg) => Err(msg),
+    }
 }
 
-fn eval_stmt_expr(expr: &Expr, frame: &mut Frame, stmt: bool) -> Option<Rc<dyn Any>> {
+fn eval_stmt_expr(expr: &Expr, frame: &mut Frame, stmt: bool) -> Result<Rc<dyn Any>, String> {
     match expr {
         Expr::Pair(p) => eval_call(&p, frame, stmt),
         Expr::Atom(s) => eval_atom(s, frame),
-        Expr::Nil => Some(Rc::new(())),
+        Expr::Nil => Ok(Rc::new(())),
     }
 }
 
-fn eval_expr(expr: &Expr, frame: &mut Frame) -> Option<Rc<dyn Any>> {
+fn eval_expr(expr: &Expr, frame: &mut Frame) -> Result<Rc<dyn Any>, String> {
     eval_stmt_expr(expr, frame, false)
 }
 
-fn eval_atom(s: &str, frame: &mut Frame) -> Option<Rc<dyn Any>> {
+fn eval_atom(s: &str, frame: &mut Frame) -> Result<Rc<dyn Any>, String> {
     if s == "true" {
-        return Some(Rc::new(true));
+        return Ok(Rc::new(true));
     }
     if s == "false" {
-        return Some(Rc::new(false));
+        return Ok(Rc::new(false));
     }
 
     if let Some(c) = s.chars().nth(0) {
@@ -261,22 +261,21 @@ fn eval_atom(s: &str, frame: &mut Frame) -> Option<Rc<dyn Any>> {
             eval_symbol(s, frame)
         }
     } else {
-        None
+        panic!();
     }
 }
 
-fn eval_number(s: &str) -> Option<Rc<dyn Any>> {
+fn eval_number(s: &str) -> Result<Rc<dyn Any>, String> {
     let r: Result<i64, ParseIntError> = s.parse();
-    if let Result::Ok(n) = r {
-        return Some(Rc::new(n));
+    match r {
+        Result::Ok(n) => Ok(Rc::new(n)),
+        Err(e) => Err(e.to_string()),
     }
-
-    None
 }
 
-fn eval_string(s: &str) -> Option<Rc<dyn Any>> {
+fn eval_string(s: &str) -> Result<Rc<dyn Any>, String> {
     if s.len() < 2 {
-        return None;
+        panic!();
     }
 
     let s = &s[1..s.len() - 1];
@@ -300,15 +299,15 @@ fn eval_string(s: &str) -> Option<Rc<dyn Any>> {
         }
     }
 
-    Some(Rc::new(buf))
+    Ok(Rc::new(buf))
 }
 
-fn eval_symbol<'m, 'f>(s: &str, frame: &Frame<'m, 'f>) -> Option<Rc<dyn Any>> {
+fn eval_symbol<'m, 'f>(s: &str, frame: &Frame<'m, 'f>) -> Result<Rc<dyn Any>, String> {
     let mut state = &frame.state;
 
     loop {
         if state.name == s {
-            return Some(state.value.clone());
+            return Ok(state.value.clone());
         }
 
         if let Some(ref parent) = state.parent {
@@ -319,101 +318,124 @@ fn eval_symbol<'m, 'f>(s: &str, frame: &Frame<'m, 'f>) -> Option<Rc<dyn Any>> {
     }
 
     if let Some(x) = frame.env.exts.get(s) {
-        return Some(x.value.clone());
+        return Ok(x.value.clone());
     }
 
     if let Some(x) = frame.env.forms.get(s) {
-        return Some(x.value.clone());
+        return Ok(x.value.clone());
     }
 
-    None
+    Err(s.to_string())
 }
 
-fn eval_call(p: &Pair, frame: &mut Frame, stmt: bool) -> Option<Rc<dyn Any>> {
-    if let Some(x) = eval_expr(&p.0, frame) {
-        if let Some(fnref) = x.downcast_ref::<Ref>() {
-            if fnref.form {
-                return (frame.env.forms.get(fnref.name).unwrap().f)(&p.1, frame);
+fn eval_call(p: &Pair, frame: &mut Frame, stmt: bool) -> Result<Rc<dyn Any>, String> {
+    match eval_expr(&p.0, frame) {
+        Ok(x) => {
+            if let Some(fnref) = x.downcast_ref::<Ref>() {
+                if fnref.form {
+                    return (frame.env.forms.get(fnref.name).unwrap().f)(&p.1, frame);
+                } else {
+                    let mut args = Vec::new();
+
+                    match eval_args(&mut args, &p.1, frame) {
+                        None => {
+                            if let Some(ext) = frame.env.exts.get_mut(fnref.name) {
+                                if let Some(fun) = ext.fun {
+                                    fun.invoke(args)
+                                } else if let Some(ref mut fun) = ext.fun_mut {
+                                    fun.invoke(args)
+                                } else {
+                                    panic!();
+                                }
+                            } else {
+                                Err("function implementation is missing".to_string())
+                            }
+                        }
+
+                        Some(msg) => Err(msg),
+                    }
+                }
+            } else if stmt {
+                if let Expr::Nil = p.1 {
+                    Ok(x)
+                } else {
+                    Err("literal list construction not supported".to_string())
+                }
             } else {
-                let mut args = Vec::new();
-                if eval_args(&mut args, &p.1, frame) {
-                    if let Some(ext) = frame.env.exts.get_mut(fnref.name) {
-                        if let Some(fun) = ext.fun {
-                            return fun.invoke(args);
-                        } else if let Some(ref mut fun) = ext.fun_mut {
-                            return fun.invoke(args);
+                Err("not a function".to_string())
+            }
+        }
+
+        Err(msg) => Err(msg),
+    }
+}
+
+fn eval_and(args: &Expr, frame: &mut Frame) -> Result<Rc<dyn Any>, String> {
+    match args {
+        Expr::Pair(p) => {
+            match eval_expr(&p.0, frame) {
+                Ok(x) => {
+                    if is_truthful(x.clone()) {
+                        if let Expr::Nil = p.1 {
+                            Ok(x) // Final argument.
+                        } else {
+                            eval_and(&p.1, frame)
+                        }
+                    } else {
+                        Ok(x)
+                    }
+                }
+
+                Err(msg) => Err(msg),
+            }
+        }
+
+        Expr::Atom(_) => panic!(),
+
+        Expr::Nil => Ok(Rc::new(true)),
+    }
+}
+
+fn eval_or(args: &Expr, frame: &mut Frame) -> Result<Rc<dyn Any>, String> {
+    match args {
+        Expr::Pair(p) => {
+            match eval_expr(&p.0, frame) {
+                Ok(x) => {
+                    if is_truthful(x.clone()) {
+                        Ok(x)
+                    } else {
+                        if let Expr::Nil = p.1 {
+                            Ok(x) // Final argument.
+                        } else {
+                            eval_or(&p.1, frame)
                         }
                     }
                 }
+
+                Err(msg) => Err(msg),
             }
         }
 
-        if stmt {
-            if let Expr::Nil = p.1 {
-                return Some(x);
-            }
-        }
-    }
+        Expr::Atom(_) => panic!(),
 
-    None
-}
-
-fn eval_and(args: &Expr, frame: &mut Frame) -> Option<Rc<dyn Any>> {
-    match args {
-        Expr::Pair(p) => {
-            if let Some(x) = eval_expr(&p.0, frame) {
-                if is_truthful(x.clone()) {
-                    if let Expr::Nil = p.1 {
-                        Some(x) // Final argument.
-                    } else {
-                        eval_and(&p.1, frame)
-                    }
-                } else {
-                    Some(x)
-                }
-            } else {
-                None
-            }
-        }
-        Expr::Atom(_) => None,
-        Expr::Nil => Some(Rc::new(true)),
+        Expr::Nil => Ok(Rc::new(false)),
     }
 }
 
-fn eval_or(args: &Expr, frame: &mut Frame) -> Option<Rc<dyn Any>> {
+fn eval_args(dest: &mut Vec<Rc<dyn Any>>, args: &Expr, frame: &mut Frame) -> Option<String> {
     match args {
-        Expr::Pair(p) => {
-            if let Some(x) = eval_expr(&p.0, frame) {
-                if is_truthful(x.clone()) {
-                    Some(x)
-                } else {
-                    if let Expr::Nil = p.1 {
-                        Some(x) // Final argument.
-                    } else {
-                        eval_or(&p.1, frame)
-                    }
-                }
-            } else {
-                None
-            }
-        }
-        Expr::Atom(_) => None,
-        Expr::Nil => Some(Rc::new(false)),
-    }
-}
-
-fn eval_args(dest: &mut Vec<Rc<dyn Any>>, args: &Expr, frame: &mut Frame) -> bool {
-    match args {
-        Expr::Pair(p) => {
-            if let Some(x) = eval_expr(&p.0, frame) {
+        Expr::Pair(p) => match eval_expr(&p.0, frame) {
+            Ok(x) => {
                 dest.push(x);
                 eval_args(dest, &p.1, frame)
-            } else {
-                false
             }
-        }
-        Expr::Atom(_) => false,
-        Expr::Nil => true,
+
+            Err(msg) => Some(msg),
+        },
+
+        Expr::Atom(_) => panic!(),
+
+        Expr::Nil => None,
     }
 }
 
@@ -439,8 +461,10 @@ pub fn is_truthful(x: Rc<dyn Any>) -> bool {
 
 fn choose_name<'m, 'f>(frame: &Frame<'m, 'f>) -> String {
     for i in 1.. {
-        let s = format!("${}", i);
-        if let Some(_) = eval_symbol(&s, frame) {
+        let mut s = String::new();
+        s.push('$');
+        s.push_str(&i.to_string());
+        if let Ok(_) = eval_symbol(&s, frame) {
             continue;
         }
         return s;
@@ -463,11 +487,11 @@ mod tests {
     struct Id;
 
     impl Fun for Id {
-        fn invoke(&self, args: Vec<Rc<dyn Any>>) -> Option<Rc<dyn Any>> {
+        fn invoke(&self, args: Vec<Rc<dyn Any>>) -> Result<Rc<dyn Any>, String> {
             if args.len() == 1 {
-                Some(args[0].clone())
+                Ok(args[0].clone())
             } else {
-                None
+                Err("id: wrong number of arguments".to_string())
             }
         }
     }
@@ -477,17 +501,17 @@ mod tests {
     }
 
     impl FunMut for Greet {
-        fn invoke(&mut self, args: Vec<Rc<dyn Any>>) -> Option<Rc<dyn Any>> {
+        fn invoke(&mut self, args: Vec<Rc<dyn Any>>) -> Result<Rc<dyn Any>, String> {
             if let Some(x) = args.first() {
                 if let Some(b) = x.downcast_ref::<bool>() {
                     if *b {
                         self.greetings += 1;
-                        return Some(Rc::new("hello, world".to_string()));
+                        return Ok(Rc::new("hello, world".to_string()));
                     }
                 }
             }
 
-            Some(Rc::new(()))
+            Ok(Rc::new(()))
         }
     }
 

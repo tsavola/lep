@@ -19,15 +19,20 @@ fn main() {
     let mut env = Env::new();
     builtin::register_all(&mut env);
 
-    if let Some(state) = eval_stmt(&line, State::new(), &mut env) {
-        if let Some(repr) = stringify(state.result_value.clone()) {
-            if repr.len() > 0 {
-                println!("{}", repr);
+    match eval_stmt(&line, State::new(), &mut env) {
+        Ok(state) => {
+            if let Some(repr) = stringify(state.result_value.clone()) {
+                if repr.len() > 0 {
+                    println!("{}", repr);
+                }
+            } else {
+                exit(1);
             }
-        } else {
-            exit(1);
         }
-    } else {
-        exit(2);
+
+        Err(msg) => {
+            println!("error: {}", msg);
+            exit(2);
+        }
     }
 }
