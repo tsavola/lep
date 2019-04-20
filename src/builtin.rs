@@ -5,10 +5,18 @@
 use std::any::Any;
 use std::rc::Rc;
 
-use super::eval::{is_truthful, Env, Fun};
+use super::eval::{is_truthful, Env, Fun, Pair};
 
 fn expected_i64() -> Result<Rc<dyn Any>, String> {
     Err("arithmetic function expects i64".to_string())
+}
+
+fn expected_pair() -> Result<Rc<dyn Any>, String> {
+    Err("function expects cons pair as argument".to_string())
+}
+
+fn wrong_number_of_arguments() -> Result<Rc<dyn Any>, String> {
+    Err("wrong number of arguments".to_string())
 }
 
 /// Register all optional built-in functions.
@@ -17,23 +25,35 @@ pub fn register_all(env: &mut Env) {
     env.register("-", &SUB);
     env.register("*", &MUL);
     env.register("/", &DIV);
-    env.register("identity", &IDENTITY);
+    env.register("car", &CAR);
+    env.register("cdr", &CDR);
+    env.register("cons", &CONS);
+    env.register("list", &LIST);
     env.register("not", &NOT);
+    env.register("identity", &IDENTITY);
 }
 
 pub static ADD: Add = Add {};
 pub static SUB: Sub = Sub {};
 pub static MUL: Mul = Mul {};
 pub static DIV: Div = Div {};
-pub static IDENTITY: Identity = Identity {};
+pub static CAR: Car = Car {};
+pub static CDR: Cdr = Cdr {};
+pub static CONS: Cons = Cons {};
+pub static LIST: List = List {};
 pub static NOT: Not = Not {};
+pub static IDENTITY: Identity = Identity {};
 
 pub struct Add;
 pub struct Sub;
 pub struct Mul;
 pub struct Div;
-pub struct Identity;
+pub struct Car;
+pub struct Cdr;
+pub struct Cons;
+pub struct List;
 pub struct Not;
+pub struct Identity;
 
 impl Fun for Add {
     fn invoke(&self, args: Vec<Rc<dyn Any>>) -> Result<Rc<dyn Any>, String> {
@@ -131,13 +151,51 @@ impl Fun for Div {
     }
 }
 
-impl Fun for Identity {
+impl Fun for Car {
     fn invoke(&self, args: Vec<Rc<dyn Any>>) -> Result<Rc<dyn Any>, String> {
         if args.len() == 1 {
-            Ok(args[0].clone())
+            if let Some(p) = args[0].downcast_ref::<Pair>() {
+                Ok(p.0.clone())
+            } else {
+                expected_pair()
+            }
         } else {
-            return expected_i64();
+            wrong_number_of_arguments()
         }
+    }
+}
+
+impl Fun for Cdr {
+    fn invoke(&self, args: Vec<Rc<dyn Any>>) -> Result<Rc<dyn Any>, String> {
+        if args.len() == 1 {
+            if let Some(p) = args[0].downcast_ref::<Pair>() {
+                Ok(p.1.clone())
+            } else {
+                expected_pair()
+            }
+        } else {
+            wrong_number_of_arguments()
+        }
+    }
+}
+
+impl Fun for Cons {
+    fn invoke(&self, args: Vec<Rc<dyn Any>>) -> Result<Rc<dyn Any>, String> {
+        if args.len() == 2 {
+            Ok(Rc::new(Pair(args[0].clone(), args[1].clone())))
+        } else {
+            wrong_number_of_arguments()
+        }
+    }
+}
+
+impl Fun for List {
+    fn invoke(&self, args: Vec<Rc<dyn Any>>) -> Result<Rc<dyn Any>, String> {
+        let mut tail: Rc<dyn Any> = Rc::new(());
+        for i in 0..args.len() {
+            tail = Rc::new(Pair(args[args.len() - i - 1].clone(), tail))
+        }
+        Ok(tail)
     }
 }
 
@@ -146,7 +204,17 @@ impl Fun for Not {
         if args.len() == 1 {
             Ok(Rc::new(!is_truthful(args[0].clone())))
         } else {
-            return expected_i64();
+            wrong_number_of_arguments()
+        }
+    }
+}
+
+impl Fun for Identity {
+    fn invoke(&self, args: Vec<Rc<dyn Any>>) -> Result<Rc<dyn Any>, String> {
+        if args.len() == 1 {
+            Ok(args[0].clone())
+        } else {
+            wrong_number_of_arguments()
         }
     }
 }

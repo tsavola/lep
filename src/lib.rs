@@ -9,10 +9,10 @@ pub mod builtin;
 mod eval;
 mod parse;
 
-pub use eval::{eval_stmt, Env, Fun, FunMut, Ref, State};
+pub use eval::{eval_stmt, Env, Fun, FunMut, Pair, Ref, State};
 
-/// Stringify (), bool, i64, String or Ref.  () is represented by the empty
-/// string.  String will be quoted.  None is returned if the type is not
+/// Stringify (), bool, i64, String, Ref or Pair.  () is represented by the
+/// empty string.  String will be quoted.  None is returned if the type is not
 /// supported.
 pub fn stringify(x: Rc<dyn Any>) -> Option<String> {
     if let Some(_) = x.downcast_ref::<()>() {
@@ -40,5 +40,27 @@ pub fn stringify(x: Rc<dyn Any>) -> Option<String> {
         return Some(r.to_string());
     }
 
+    if let Some(p) = x.downcast_ref::<Pair>() {
+        let mut s = String::new();
+        s.push('(');
+        stringify_explicit(&mut s, &p.0);
+        s.push_str(" . ");
+        stringify_explicit(&mut s, &p.1);
+        s.push(')');
+        return Some(s);
+    }
+
     None
+}
+
+fn stringify_explicit(dest: &mut String, x: &Rc<dyn Any>) {
+    if let Some(_) = x.downcast_ref::<()>() {
+        dest.push_str("()");
+    }
+
+    if let Some(s) = stringify(x.clone()) {
+        dest.push_str(&s);
+    } else {
+        dest.push('?');
+    }
 }

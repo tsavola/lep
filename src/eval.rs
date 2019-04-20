@@ -8,11 +8,13 @@ use std::num::ParseIntError;
 use std::rc::Rc;
 use std::result::Result;
 
-use super::parse::parse_stmt;
+use super::parse;
 use super::parse::Expr;
-use super::parse::Pair;
 
 static UNDERSCORE: Expr = Expr::Atom("_");
+
+/// Pair may be a node in a singly linked list.
+pub struct Pair(pub Rc<dyn Any>, pub Rc<dyn Any>);
 
 /// Ref is a native object stored in an Rc<dyn Any>.
 pub struct Ref {
@@ -162,7 +164,7 @@ pub fn eval_stmt<'m>(s: &str, state: State, env: &'m mut Env) -> Result<State, S
         });
     }
 
-    match parse_stmt(s) {
+    match parse::parse_stmt(s) {
         Ok(ref expr) => {
             let mut frame = Frame {
                 env: env,
@@ -328,7 +330,7 @@ fn eval_symbol<'m, 'f>(s: &str, frame: &Frame<'m, 'f>) -> Result<Rc<dyn Any>, St
     Err(s.to_string())
 }
 
-fn eval_call(p: &Pair, frame: &mut Frame, stmt: bool) -> Result<Rc<dyn Any>, String> {
+fn eval_call(p: &parse::Pair, frame: &mut Frame, stmt: bool) -> Result<Rc<dyn Any>, String> {
     match eval_expr(&p.0, frame) {
         Ok(x) => {
             if let Some(fnref) = x.downcast_ref::<Ref>() {
@@ -356,10 +358,13 @@ fn eval_call(p: &Pair, frame: &mut Frame, stmt: bool) -> Result<Rc<dyn Any>, Str
                     }
                 }
             } else if stmt {
-                if let Expr::Nil = p.1 {
-                    Ok(x)
-                } else {
-                    Err("literal list construction not supported".to_string())
+                match p.1 {
+                    Expr::Nil => Ok(x),
+
+                    _ => match eval_list(&p.1, frame) {
+                        Ok(cdr) => Ok(Rc::new(Pair(x, cdr))),
+                        Err(msg) => Err(msg),
+                    },
                 }
             } else {
                 Err("not a function".to_string())
@@ -367,6 +372,23 @@ fn eval_call(p: &Pair, frame: &mut Frame, stmt: bool) -> Result<Rc<dyn Any>, Str
         }
 
         Err(msg) => Err(msg),
+    }
+}
+
+fn eval_list(args: &Expr, frame: &mut Frame) -> Result<Rc<dyn Any>, String> {
+    match args {
+        Expr::Pair(p) => match eval_expr(&p.0, frame) {
+            Ok(car) => match eval_list(&p.1, frame) {
+                Ok(cdr) => Ok(Rc::new(Pair(car, cdr))),
+                Err(msg) => Err(msg),
+            },
+
+            Err(msg) => Err(msg),
+        },
+
+        Expr::Atom(_) => panic!(),
+
+        Expr::Nil => Ok(Rc::new(())),
     }
 }
 
@@ -572,6 +594,28 @@ mod tests {
                 .unwrap(),
             r#""foo""#
         );
+    }
+
+    #[test]
+    fn test_eval_list() {
+        let r = eval("1", &mut Env::new());
+        assert_eq!(*r.downcast_ref::<i64>().unwrap(), 1);
+
+        let r = eval("2 3", &mut Env::new());
+        let head = r.downcast_ref::<Pair>().unwrap();
+        assert_eq!(*head.0.downcast_ref::<i64>().unwrap(), 2);
+        let tail = head.1.downcast_ref::<Pair>().unwrap();
+        assert_eq!(*tail.0.downcast_ref::<i64>().unwrap(), 3);
+        tail.1.downcast_ref::<()>().unwrap();
+
+        let r = eval("4 5 6", &mut Env::new());
+        let head = r.downcast_ref::<Pair>().unwrap();
+        assert_eq!(*head.0.downcast_ref::<i64>().unwrap(), 4);
+        let mid = head.1.downcast_ref::<Pair>().unwrap();
+        assert_eq!(*mid.0.downcast_ref::<i64>().unwrap(), 5);
+        let tail = mid.1.downcast_ref::<Pair>().unwrap();
+        assert_eq!(*tail.0.downcast_ref::<i64>().unwrap(), 6);
+        tail.1.downcast_ref::<()>().unwrap();
     }
 
     #[test]

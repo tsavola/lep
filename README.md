@@ -47,6 +47,8 @@ Examples:
     >> * (/ (- 10 5) 2) 50
     100
     >> ()
+    >> list 1 2
+    (1 . (2 . ()))
     >> ! + 1 2 3
     $1 = 6
     >> !x + 1 2 3
@@ -82,7 +84,13 @@ Some expressions cannot be written without outer parentheses:
     >> ((choose-operator) arg)
     ok
 
-A statement consisting only of whitespace yields nil and leaves the variables
+When the first term is a variable or a literal and there are multiple terms,
+the expression is quoted:
+
+    >> 1 2
+    (1 . (2 . ()))
+
+A statement consisting only of whitespace yields `()` and leaves the variables
 unchanged.  When the user inputs an empty line, the embedder program doesn't
 need to evaluate it, and may do something else instead.
 
@@ -103,8 +111,10 @@ Optional built-in functions:
 (- arg1 arg2 ...)
 (* arg1 arg2 ...)
 (/ arg1 arg2 ...)
-(identity arg)
+(cons arg1 arg2)
+(list arg1 arg2 ...)
 (not arg)
+(identity arg)
 ```
 
 Custom extension functions implement the `lep::Fun` or the `lep::FunMut` trait:
@@ -138,6 +148,7 @@ Fully supported types:
 - `i64`
 - `String`
 - `lep::Ref` (function)
+- `lep::Pair` (cons cell, e.g. a list node)
 
 The following values are considered untrue:
 
