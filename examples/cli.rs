@@ -21,7 +21,7 @@ fn main() {
 
     match eval_stmt(&line, State::new(), &mut env) {
         Ok(state) => {
-            if let Some(repr) = stringify(state.result_value.clone()) {
+            if let Some(repr) = stringify(state.result.value.clone()) {
                 if repr.len() > 0 {
                     println!("{}", repr);
                 }

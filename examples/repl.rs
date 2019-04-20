@@ -63,25 +63,25 @@ fn main() {
 
                 match eval_stmt(&line, state.clone(), &mut env) {
                     Ok(res) => {
-                        if let Some(repr) = stringify(res.result_value.clone()) {
+                        if let Some(repr) = stringify(res.result.value.clone()) {
                             if repr.is_empty() {
-                                if res.result_name == "_" {
+                                if res.result.name == "_" {
                                     prefix = "".to_string();
-                                } else if !res.result_name.is_empty() {
-                                    println!("{} = ()", res.result_name);
+                                } else if !res.result.name.is_empty() {
+                                    println!("{} = ()", res.result.name);
                                 }
                             } else {
-                                if res.result_name == "_" {
+                                if res.result.name == "_" {
                                     prefix = repr + " ";
-                                } else if !res.result_name.is_empty() {
-                                    println!("{} = {}", res.result_name, repr);
+                                } else if !res.result.name.is_empty() {
+                                    println!("{} = {}", res.result.name, repr);
                                 }
                             }
                         } else {
-                            if res.result_name == "_" {
+                            if res.result.name == "_" {
                                 prefix = "? ".to_string();
-                            } else if !res.result_name.is_empty() {
-                                println!("{} = ?", res.result_name);
+                            } else if !res.result.name.is_empty() {
+                                println!("{} = ?", res.result.name);
                             }
                         }
 

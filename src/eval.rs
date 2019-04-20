@@ -120,10 +120,15 @@ impl<'f> Env<'f> {
 }
 
 #[derive(Clone)]
+pub struct Binding {
+    pub name: String,
+    pub value: Rc<dyn Any>,
+}
+
+#[derive(Clone)]
 pub struct State {
     inner: Rc<StateLayer>,
-    pub result_name: String,
-    pub result_value: Rc<dyn Any>,
+    pub result: Binding,
 }
 
 impl State {
@@ -136,8 +141,10 @@ impl State {
                 name: "_".to_string(),
                 value: nil.clone(),
             }),
-            result_name: "".to_string(),
-            result_value: nil,
+            result: Binding {
+                name: "".to_string(),
+                value: nil,
+            },
         }
     }
 }
@@ -159,8 +166,10 @@ pub fn eval_stmt<'m>(s: &str, state: State, env: &'m mut Env) -> Result<State, S
     if s.trim().len() == 0 {
         return Ok(State {
             inner: state.inner,
-            result_name: "".to_string(),
-            result_value: Rc::new(()),
+            result: Binding {
+                name: "".to_string(),
+                value: Rc::new(()),
+            },
         });
     }
 
@@ -211,8 +220,10 @@ pub fn eval_stmt<'m>(s: &str, state: State, env: &'m mut Env) -> Result<State, S
 
                     return Ok(State {
                         inner: new,
-                        result_name: name.to_string(),
-                        result_value: value.clone(),
+                        result: Binding {
+                            name: name.to_string(),
+                            value: value.clone(),
+                        },
                     });
                 }
 
@@ -502,7 +513,8 @@ mod tests {
     fn eval<'m>(s: &str, env: &'m mut Env) -> Rc<dyn Any> {
         eval_stmt(s, State::new(), env)
             .unwrap()
-            .result_value
+            .result
+            .value
             .clone()
     }
 
@@ -661,64 +673,64 @@ mod tests {
 
         let s = eval_stmt("!x id true", s, &mut e).unwrap();
         let s = eval_stmt("id x", s, &mut e).unwrap();
-        assert_eq!(s.result_value.downcast_ref::<bool>().unwrap().clone(), true);
+        assert_eq!(s.result.value.downcast_ref::<bool>().unwrap().clone(), true);
         let s = eval_stmt("id _", s, &mut e).unwrap();
-        assert_eq!(s.result_value.downcast_ref::<bool>().unwrap().clone(), true);
+        assert_eq!(s.result.value.downcast_ref::<bool>().unwrap().clone(), true);
 
         let s = eval_stmt("id 123", s, &mut e).unwrap();
         let s = eval_stmt("id _", s, &mut e).unwrap();
-        assert_eq!(s.result_value.downcast_ref::<i64>().unwrap().clone(), 123);
+        assert_eq!(s.result.value.downcast_ref::<i64>().unwrap().clone(), 123);
         let s = eval_stmt("!y", s, &mut e).unwrap();
         let s = eval_stmt("id y", s, &mut e).unwrap();
-        assert_eq!(s.result_value.downcast_ref::<i64>().unwrap().clone(), 123);
+        assert_eq!(s.result.value.downcast_ref::<i64>().unwrap().clone(), 123);
 
         let s = eval_stmt(r#"id "abc""#, s, &mut e).unwrap();
         let s = eval_stmt("!", s, &mut e).unwrap();
         let s = eval_stmt("id $1", s, &mut e).unwrap();
         assert_eq!(
-            s.result_value.downcast_ref::<String>().unwrap().clone(),
+            s.result.value.downcast_ref::<String>().unwrap().clone(),
             "abc"
         );
 
         let s = eval_stmt("id x", s, &mut e).unwrap();
-        assert_eq!(s.result_value.downcast_ref::<bool>().unwrap().clone(), true);
+        assert_eq!(s.result.value.downcast_ref::<bool>().unwrap().clone(), true);
 
         let s = eval_stmt("id y", s, &mut e).unwrap();
-        assert_eq!(s.result_value.downcast_ref::<i64>().unwrap().clone(), 123);
+        assert_eq!(s.result.value.downcast_ref::<i64>().unwrap().clone(), 123);
 
         let s = eval_stmt("id $1", s, &mut e).unwrap();
         assert_eq!(
-            s.result_value.downcast_ref::<String>().unwrap().clone(),
+            s.result.value.downcast_ref::<String>().unwrap().clone(),
             "abc"
         );
 
         let s = eval_stmt("(!z id false)", s, &mut e).unwrap();
         let s = eval_stmt("(id z)", s, &mut e).unwrap();
         assert_eq!(
-            s.result_value.downcast_ref::<bool>().unwrap().clone(),
+            s.result.value.downcast_ref::<bool>().unwrap().clone(),
             false
         );
         let s = eval_stmt("(id z)", s, &mut e).unwrap();
         let s = eval_stmt("(id _)", s, &mut e).unwrap();
         assert_eq!(
-            s.result_value.downcast_ref::<bool>().unwrap().clone(),
+            s.result.value.downcast_ref::<bool>().unwrap().clone(),
             false
         );
 
         let s = eval_stmt("!-- id (id 555)", s, &mut e).unwrap();
         let s = eval_stmt("id --", s, &mut e).unwrap();
-        assert_eq!(s.result_value.downcast_ref::<i64>().unwrap().clone(), 555);
+        assert_eq!(s.result.value.downcast_ref::<i64>().unwrap().clone(), 555);
 
         let s = eval_stmt("!$3 id 3", s, &mut e).unwrap();
         let s = eval_stmt("id $3", s, &mut e).unwrap();
-        assert_eq!(s.result_value.downcast_ref::<i64>().unwrap().clone(), 3);
+        assert_eq!(s.result.value.downcast_ref::<i64>().unwrap().clone(), 3);
 
         let s = eval_stmt("! id 2", s, &mut e).unwrap();
         let s = eval_stmt("id $2", s, &mut e).unwrap();
-        assert_eq!(s.result_value.downcast_ref::<i64>().unwrap().clone(), 2);
+        assert_eq!(s.result.value.downcast_ref::<i64>().unwrap().clone(), 2);
 
         let s = eval_stmt("! id 4", s, &mut e).unwrap();
         let s = eval_stmt("id $4", s, &mut e).unwrap();
-        assert_eq!(s.result_value.downcast_ref::<i64>().unwrap().clone(), 4);
+        assert_eq!(s.result.value.downcast_ref::<i64>().unwrap().clone(), 4);
     }
 }
