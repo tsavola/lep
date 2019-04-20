@@ -111,6 +111,8 @@ Optional built-in functions:
 (- arg1 arg2 ...)
 (* arg1 arg2 ...)
 (/ arg1 arg2 ...)
+(car arg)
+(cdr arg)
 (cons arg1 arg2)
 (list arg1 arg2 ...)
 (not arg)
