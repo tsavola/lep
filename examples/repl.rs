@@ -51,7 +51,7 @@ fn main() {
     env.register_mut("sequence", &mut sequence);
     env.register("time", &time);
 
-    let mut state = State::new();
+    let mut state = State::new(&env);
 
     let mut rl = Editor::<()>::new();
     let mut prefix = "".to_string();

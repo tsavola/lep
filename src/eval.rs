@@ -54,6 +54,9 @@ struct ExtFun<'f> {
 }
 
 pub struct Env<'f> {
+    nil_value: Rc<dyn Any>,
+    false_value: Rc<dyn Any>,
+    true_value: Rc<dyn Any>,
     forms: HashMap<&'static str, Form>,
     exts: HashMap<&'static str, ExtFun<'f>>,
 }
@@ -61,6 +64,9 @@ pub struct Env<'f> {
 impl<'f> Env<'f> {
     pub fn new() -> Self {
         let mut env = Env {
+            nil_value: Rc::new(()),
+            false_value: Rc::new(false),
+            true_value: Rc::new(true),
             forms: HashMap::new(),
             exts: HashMap::new(),
         };
@@ -132,18 +138,16 @@ pub struct State {
 }
 
 impl State {
-    pub fn new() -> Self {
-        let nil = Rc::new(());
-
+    pub fn new(env: &Env) -> Self {
         State {
             inner: Rc::new(StateLayer {
                 parent: None,
                 name: "_".to_string(),
-                value: nil.clone(),
+                value: env.nil_value.clone(),
             }),
             result: Binding {
                 name: "".to_string(),
-                value: nil,
+                value: env.nil_value.clone(),
             },
         }
     }
@@ -168,7 +172,7 @@ pub fn eval_stmt<'m>(s: &str, state: State, env: &'m mut Env) -> Result<State, S
             inner: state.inner,
             result: Binding {
                 name: "".to_string(),
-                value: Rc::new(()),
+                value: env.nil_value.clone(),
             },
         });
     }
@@ -239,7 +243,7 @@ fn eval_stmt_expr(expr: &Expr, frame: &mut Frame, stmt: bool) -> Result<Rc<dyn A
     match expr {
         Expr::Pair(p) => eval_call(&p, frame, stmt),
         Expr::Atom(s) => eval_atom(s, frame),
-        Expr::Nil => Ok(Rc::new(())),
+        Expr::Nil => Ok(frame.env.nil_value.clone()),
     }
 }
 
@@ -248,11 +252,11 @@ fn eval_expr(expr: &Expr, frame: &mut Frame) -> Result<Rc<dyn Any>, String> {
 }
 
 fn eval_atom(s: &str, frame: &mut Frame) -> Result<Rc<dyn Any>, String> {
-    if s == "true" {
-        return Ok(Rc::new(true));
-    }
     if s == "false" {
-        return Ok(Rc::new(false));
+        return Ok(frame.env.false_value.clone());
+    }
+    if s == "true" {
+        return Ok(frame.env.true_value.clone());
     }
 
     if let Some(c) = s.chars().nth(0) {
@@ -399,7 +403,7 @@ fn eval_list(args: &Expr, frame: &mut Frame) -> Result<Rc<dyn Any>, String> {
 
         Expr::Atom(_) => panic!(),
 
-        Expr::Nil => Ok(Rc::new(())),
+        Expr::Nil => Ok(frame.env.nil_value.clone()),
     }
 }
 
@@ -425,7 +429,7 @@ fn eval_and(args: &Expr, frame: &mut Frame) -> Result<Rc<dyn Any>, String> {
 
         Expr::Atom(_) => panic!(),
 
-        Expr::Nil => Ok(Rc::new(true)),
+        Expr::Nil => Ok(frame.env.true_value.clone()),
     }
 }
 
@@ -451,7 +455,7 @@ fn eval_or(args: &Expr, frame: &mut Frame) -> Result<Rc<dyn Any>, String> {
 
         Expr::Atom(_) => panic!(),
 
-        Expr::Nil => Ok(Rc::new(false)),
+        Expr::Nil => Ok(frame.env.false_value.clone()),
     }
 }
 
@@ -511,7 +515,7 @@ mod tests {
     use super::*;
 
     fn eval<'m>(s: &str, env: &'m mut Env) -> Rc<dyn Any> {
-        eval_stmt(s, State::new(), env)
+        eval_stmt(s, State::new(&env), env)
             .unwrap()
             .result
             .value
@@ -669,7 +673,7 @@ mod tests {
         let mut e = Env::new();
         e.register("id", &id);
 
-        let s = State::new();
+        let s = State::new(&e);
 
         let s = eval_stmt("!x id true", s, &mut e).unwrap();
         let s = eval_stmt("id x", s, &mut e).unwrap();

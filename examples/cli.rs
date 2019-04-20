@@ -19,7 +19,7 @@ fn main() {
     let mut env = Env::new();
     builtin::register_all(&mut env);
 
-    match eval_stmt(&line, State::new(), &mut env) {
+    match eval_stmt(&line, State::new(&env), &mut env) {
         Ok(state) => {
             if let Some(repr) = stringify(state.result.value.clone()) {
                 if repr.len() > 0 {

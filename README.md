@@ -175,7 +175,7 @@ An evaluation iteration takes an existing `lep::State` and replaces it with a
 new one:
 
 ```rust
-let mut state = lep::State::new();
+let mut state = lep::State::new(&env);
 loop {
     match lep::eval_stmt(read_line(), state.clone(), &mut env) {
         Ok(new_state) => {
