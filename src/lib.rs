@@ -2,6 +2,10 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
+//! An interpreter for implementing interactive consoles.
+//!
+//! See https://crates.io/crates/lep for an overview.
+
 use std::any::Any;
 use std::rc::Rc;
 
