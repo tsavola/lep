@@ -5,7 +5,7 @@
 use std::any::Any;
 use std::rc::Rc;
 
-use super::eval::{is_truthful, Env, Fun, Pair};
+use super::eval::{is_truthful, Env, Fun, Pair, World};
 
 fn expected_i64() -> Result<Rc<dyn Any>, String> {
     Err("arithmetic function expects i64".to_string())
@@ -56,7 +56,7 @@ pub struct Not;
 pub struct Identity;
 
 impl Fun for Add {
-    fn invoke(&self, args: Vec<Rc<dyn Any>>) -> Result<Rc<dyn Any>, String> {
+    fn invoke(&self, _: &World, args: Vec<Rc<dyn Any>>) -> Result<Rc<dyn Any>, String> {
         let mut res: i64 = 0;
 
         for x in args {
@@ -72,7 +72,7 @@ impl Fun for Add {
 }
 
 impl Fun for Sub {
-    fn invoke(&self, args: Vec<Rc<dyn Any>>) -> Result<Rc<dyn Any>, String> {
+    fn invoke(&self, _: &World, args: Vec<Rc<dyn Any>>) -> Result<Rc<dyn Any>, String> {
         if args.len() == 0 {
             Ok(Rc::new(0 as i64))
         } else {
@@ -100,7 +100,7 @@ impl Fun for Sub {
 }
 
 impl Fun for Mul {
-    fn invoke(&self, args: Vec<Rc<dyn Any>>) -> Result<Rc<dyn Any>, String> {
+    fn invoke(&self, _: &World, args: Vec<Rc<dyn Any>>) -> Result<Rc<dyn Any>, String> {
         if args.len() == 0 {
             Ok(Rc::new(0 as i64))
         } else {
@@ -124,7 +124,7 @@ impl Fun for Mul {
 }
 
 impl Fun for Div {
-    fn invoke(&self, args: Vec<Rc<dyn Any>>) -> Result<Rc<dyn Any>, String> {
+    fn invoke(&self, _: &World, args: Vec<Rc<dyn Any>>) -> Result<Rc<dyn Any>, String> {
         if args.len() == 0 {
             Ok(Rc::new(0 as i64))
         } else {
@@ -152,7 +152,7 @@ impl Fun for Div {
 }
 
 impl Fun for Car {
-    fn invoke(&self, args: Vec<Rc<dyn Any>>) -> Result<Rc<dyn Any>, String> {
+    fn invoke(&self, _: &World, args: Vec<Rc<dyn Any>>) -> Result<Rc<dyn Any>, String> {
         if args.len() == 1 {
             if let Some(p) = args[0].downcast_ref::<Pair>() {
                 Ok(p.0.clone())
@@ -166,7 +166,7 @@ impl Fun for Car {
 }
 
 impl Fun for Cdr {
-    fn invoke(&self, args: Vec<Rc<dyn Any>>) -> Result<Rc<dyn Any>, String> {
+    fn invoke(&self, _: &World, args: Vec<Rc<dyn Any>>) -> Result<Rc<dyn Any>, String> {
         if args.len() == 1 {
             if let Some(p) = args[0].downcast_ref::<Pair>() {
                 Ok(p.1.clone())
@@ -180,7 +180,7 @@ impl Fun for Cdr {
 }
 
 impl Fun for Cons {
-    fn invoke(&self, args: Vec<Rc<dyn Any>>) -> Result<Rc<dyn Any>, String> {
+    fn invoke(&self, _: &World, args: Vec<Rc<dyn Any>>) -> Result<Rc<dyn Any>, String> {
         if args.len() == 2 {
             Ok(Rc::new(Pair(args[0].clone(), args[1].clone())))
         } else {
@@ -190,7 +190,7 @@ impl Fun for Cons {
 }
 
 impl Fun for List {
-    fn invoke(&self, args: Vec<Rc<dyn Any>>) -> Result<Rc<dyn Any>, String> {
+    fn invoke(&self, _: &World, args: Vec<Rc<dyn Any>>) -> Result<Rc<dyn Any>, String> {
         let mut tail: Rc<dyn Any> = Rc::new(());
         for i in 0..args.len() {
             tail = Rc::new(Pair(args[args.len() - i - 1].clone(), tail))
@@ -200,7 +200,7 @@ impl Fun for List {
 }
 
 impl Fun for Not {
-    fn invoke(&self, args: Vec<Rc<dyn Any>>) -> Result<Rc<dyn Any>, String> {
+    fn invoke(&self, _: &World, args: Vec<Rc<dyn Any>>) -> Result<Rc<dyn Any>, String> {
         if args.len() == 1 {
             Ok(Rc::new(!is_truthful(args[0].clone())))
         } else {
@@ -210,7 +210,7 @@ impl Fun for Not {
 }
 
 impl Fun for Identity {
-    fn invoke(&self, args: Vec<Rc<dyn Any>>) -> Result<Rc<dyn Any>, String> {
+    fn invoke(&self, _: &World, args: Vec<Rc<dyn Any>>) -> Result<Rc<dyn Any>, String> {
         if args.len() == 1 {
             Ok(args[0].clone())
         } else {

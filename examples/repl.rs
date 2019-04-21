@@ -10,14 +10,14 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use rustyline::error::ReadlineError;
 use rustyline::Editor;
 
-use lep::{builtin, eval_stmt, stringify, Env, Fun, FunMut, State};
+use lep::{builtin, eval_stmt, stringify, Env, Fun, FunMut, State, World};
 
 struct Sequence {
     n: i64,
 }
 
 impl FunMut for Sequence {
-    fn invoke(&mut self, args: Vec<Rc<dyn Any>>) -> Result<Rc<dyn Any>, String> {
+    fn invoke(&mut self, _: &World, args: Vec<Rc<dyn Any>>) -> Result<Rc<dyn Any>, String> {
         if args.len() == 0 {
             self.n += 1;
             Ok(Rc::new(self.n))
@@ -30,7 +30,7 @@ impl FunMut for Sequence {
 struct Time;
 
 impl Fun for Time {
-    fn invoke(&self, args: Vec<Rc<dyn Any>>) -> Result<Rc<dyn Any>, String> {
+    fn invoke(&self, _: &World, args: Vec<Rc<dyn Any>>) -> Result<Rc<dyn Any>, String> {
         if args.is_empty() {
             match SystemTime::now().duration_since(UNIX_EPOCH) {
                 Ok(n) => Ok(Rc::new(n.as_secs() as i64)),
@@ -61,7 +61,7 @@ fn main() {
             Ok(line) => {
                 rl.add_history_entry(line.as_ref());
 
-                match eval_stmt(&line, state.clone(), &mut env) {
+                match eval_stmt(&mut env, state.clone(), &line) {
                     Ok(res) => {
                         if let Some(repr) = stringify(res.result.value.clone()) {
                             if repr.is_empty() {

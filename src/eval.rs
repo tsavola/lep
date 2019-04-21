@@ -32,6 +32,34 @@ impl ToString for Ref {
     }
 }
 
+pub struct World {
+    nil_: Rc<dyn Any>,
+    false_: Rc<dyn Any>,
+    true_: Rc<dyn Any>,
+}
+
+impl World {
+    fn new() -> Self {
+        World {
+            nil_: Rc::new(()),
+            false_: Rc::new(false),
+            true_: Rc::new(true),
+        }
+    }
+
+    pub fn nil(&self) -> Rc<dyn Any> {
+        self.nil_.clone()
+    }
+
+    pub fn boolean(&self, value: bool) -> Rc<dyn Any> {
+        if value {
+            self.true_.clone()
+        } else {
+            self.false_.clone()
+        }
+    }
+}
+
 struct Form {
     value: Rc<dyn Any>,
     f: fn(&Expr, &mut Frame) -> Result<Rc<dyn Any>, String>,
@@ -39,12 +67,12 @@ struct Form {
 
 /// Fun is an extension function object.
 pub trait Fun {
-    fn invoke(&self, args: Vec<Rc<dyn Any>>) -> Result<Rc<dyn Any>, String>;
+    fn invoke(&self, w: &World, args: Vec<Rc<dyn Any>>) -> Result<Rc<dyn Any>, String>;
 }
 
 /// FunMut is an extension function object with side-effects.
 pub trait FunMut {
-    fn invoke(&mut self, args: Vec<Rc<dyn Any>>) -> Result<Rc<dyn Any>, String>;
+    fn invoke(&mut self, w: &World, args: Vec<Rc<dyn Any>>) -> Result<Rc<dyn Any>, String>;
 }
 
 struct ExtFun<'f> {
@@ -54,9 +82,7 @@ struct ExtFun<'f> {
 }
 
 pub struct Env<'f> {
-    nil_value: Rc<dyn Any>,
-    false_value: Rc<dyn Any>,
-    true_value: Rc<dyn Any>,
+    world: World,
     forms: HashMap<&'static str, Form>,
     exts: HashMap<&'static str, ExtFun<'f>>,
 }
@@ -64,9 +90,7 @@ pub struct Env<'f> {
 impl<'f> Env<'f> {
     pub fn new() -> Self {
         let mut env = Env {
-            nil_value: Rc::new(()),
-            false_value: Rc::new(false),
-            true_value: Rc::new(true),
+            world: World::new(),
             forms: HashMap::new(),
             exts: HashMap::new(),
         };
@@ -143,11 +167,11 @@ impl State {
             inner: Rc::new(StateLayer {
                 parent: None,
                 name: "_".to_string(),
-                value: env.nil_value.clone(),
+                value: env.world.nil(),
             }),
             result: Binding {
                 name: "".to_string(),
-                value: env.nil_value.clone(),
+                value: env.world.nil(),
             },
         }
     }
@@ -166,13 +190,13 @@ struct Frame<'m, 'f> {
 
 /// Parse and evaluate a statement.  A derived state with the result value is
 /// returned.
-pub fn eval_stmt<'m>(s: &str, state: State, env: &'m mut Env) -> Result<State, String> {
+pub fn eval_stmt<'m>(env: &'m mut Env, state: State, s: &str) -> Result<State, String> {
     if s.trim().len() == 0 {
         return Ok(State {
             inner: state.inner,
             result: Binding {
                 name: "".to_string(),
-                value: env.nil_value.clone(),
+                value: env.world.nil(),
             },
         });
     }
@@ -243,7 +267,7 @@ fn eval_stmt_expr(expr: &Expr, frame: &mut Frame, stmt: bool) -> Result<Rc<dyn A
     match expr {
         Expr::Pair(p) => eval_call(&p, frame, stmt),
         Expr::Atom(s) => eval_atom(s, frame),
-        Expr::Nil => Ok(frame.env.nil_value.clone()),
+        Expr::Nil => Ok(frame.env.world.nil()),
     }
 }
 
@@ -253,10 +277,10 @@ fn eval_expr(expr: &Expr, frame: &mut Frame) -> Result<Rc<dyn Any>, String> {
 
 fn eval_atom(s: &str, frame: &mut Frame) -> Result<Rc<dyn Any>, String> {
     if s == "false" {
-        return Ok(frame.env.false_value.clone());
+        return Ok(frame.env.world.boolean(false));
     }
     if s == "true" {
-        return Ok(frame.env.true_value.clone());
+        return Ok(frame.env.world.boolean(true));
     }
 
     if let Some(c) = s.chars().nth(0) {
@@ -358,9 +382,9 @@ fn eval_call(p: &parse::Pair, frame: &mut Frame, stmt: bool) -> Result<Rc<dyn An
                         None => {
                             if let Some(ext) = frame.env.exts.get_mut(fnref.name) {
                                 if let Some(fun) = ext.fun {
-                                    fun.invoke(args)
+                                    fun.invoke(&frame.env.world, args)
                                 } else if let Some(ref mut fun) = ext.fun_mut {
-                                    fun.invoke(args)
+                                    fun.invoke(&frame.env.world, args)
                                 } else {
                                     panic!();
                                 }
@@ -403,7 +427,7 @@ fn eval_list(args: &Expr, frame: &mut Frame) -> Result<Rc<dyn Any>, String> {
 
         Expr::Atom(_) => panic!(),
 
-        Expr::Nil => Ok(frame.env.nil_value.clone()),
+        Expr::Nil => Ok(frame.env.world.nil()),
     }
 }
 
@@ -429,7 +453,7 @@ fn eval_and(args: &Expr, frame: &mut Frame) -> Result<Rc<dyn Any>, String> {
 
         Expr::Atom(_) => panic!(),
 
-        Expr::Nil => Ok(frame.env.true_value.clone()),
+        Expr::Nil => Ok(frame.env.world.boolean(true)),
     }
 }
 
@@ -455,7 +479,7 @@ fn eval_or(args: &Expr, frame: &mut Frame) -> Result<Rc<dyn Any>, String> {
 
         Expr::Atom(_) => panic!(),
 
-        Expr::Nil => Ok(frame.env.false_value.clone()),
+        Expr::Nil => Ok(frame.env.world.boolean(false)),
     }
 }
 
@@ -515,7 +539,7 @@ mod tests {
     use super::*;
 
     fn eval<'m>(s: &str, env: &'m mut Env) -> Rc<dyn Any> {
-        eval_stmt(s, State::new(&env), env)
+        eval_stmt(env, State::new(&env), s)
             .unwrap()
             .result
             .value
@@ -525,7 +549,7 @@ mod tests {
     struct Id;
 
     impl Fun for Id {
-        fn invoke(&self, args: Vec<Rc<dyn Any>>) -> Result<Rc<dyn Any>, String> {
+        fn invoke(&self, _: &World, args: Vec<Rc<dyn Any>>) -> Result<Rc<dyn Any>, String> {
             if args.len() == 1 {
                 Ok(args[0].clone())
             } else {
@@ -539,7 +563,7 @@ mod tests {
     }
 
     impl FunMut for Greet {
-        fn invoke(&mut self, args: Vec<Rc<dyn Any>>) -> Result<Rc<dyn Any>, String> {
+        fn invoke(&mut self, w: &World, args: Vec<Rc<dyn Any>>) -> Result<Rc<dyn Any>, String> {
             if let Some(x) = args.first() {
                 if let Some(b) = x.downcast_ref::<bool>() {
                     if *b {
@@ -549,7 +573,7 @@ mod tests {
                 }
             }
 
-            Ok(Rc::new(()))
+            Ok(w.nil())
         }
     }
 
@@ -675,66 +699,66 @@ mod tests {
 
         let s = State::new(&e);
 
-        let s = eval_stmt("!x id true", s, &mut e).unwrap();
-        let s = eval_stmt("id x", s, &mut e).unwrap();
+        let s = eval_stmt(&mut e, s, "!x id true").unwrap();
+        let s = eval_stmt(&mut e, s, "id x").unwrap();
         assert_eq!(s.result.value.downcast_ref::<bool>().unwrap().clone(), true);
-        let s = eval_stmt("id _", s, &mut e).unwrap();
+        let s = eval_stmt(&mut e, s, "id _").unwrap();
         assert_eq!(s.result.value.downcast_ref::<bool>().unwrap().clone(), true);
 
-        let s = eval_stmt("id 123", s, &mut e).unwrap();
-        let s = eval_stmt("id _", s, &mut e).unwrap();
+        let s = eval_stmt(&mut e, s, "id 123").unwrap();
+        let s = eval_stmt(&mut e, s, "id _").unwrap();
         assert_eq!(s.result.value.downcast_ref::<i64>().unwrap().clone(), 123);
-        let s = eval_stmt("!y", s, &mut e).unwrap();
-        let s = eval_stmt("id y", s, &mut e).unwrap();
+        let s = eval_stmt(&mut e, s, "!y").unwrap();
+        let s = eval_stmt(&mut e, s, "id y").unwrap();
         assert_eq!(s.result.value.downcast_ref::<i64>().unwrap().clone(), 123);
 
-        let s = eval_stmt(r#"id "abc""#, s, &mut e).unwrap();
-        let s = eval_stmt("!", s, &mut e).unwrap();
-        let s = eval_stmt("id $1", s, &mut e).unwrap();
+        let s = eval_stmt(&mut e, s, r#"id "abc""#).unwrap();
+        let s = eval_stmt(&mut e, s, "!").unwrap();
+        let s = eval_stmt(&mut e, s, "id $1").unwrap();
         assert_eq!(
             s.result.value.downcast_ref::<String>().unwrap().clone(),
             "abc"
         );
 
-        let s = eval_stmt("id x", s, &mut e).unwrap();
+        let s = eval_stmt(&mut e, s, "id x").unwrap();
         assert_eq!(s.result.value.downcast_ref::<bool>().unwrap().clone(), true);
 
-        let s = eval_stmt("id y", s, &mut e).unwrap();
+        let s = eval_stmt(&mut e, s, "id y").unwrap();
         assert_eq!(s.result.value.downcast_ref::<i64>().unwrap().clone(), 123);
 
-        let s = eval_stmt("id $1", s, &mut e).unwrap();
+        let s = eval_stmt(&mut e, s, "id $1").unwrap();
         assert_eq!(
             s.result.value.downcast_ref::<String>().unwrap().clone(),
             "abc"
         );
 
-        let s = eval_stmt("(!z id false)", s, &mut e).unwrap();
-        let s = eval_stmt("(id z)", s, &mut e).unwrap();
+        let s = eval_stmt(&mut e, s, "(!z id false)").unwrap();
+        let s = eval_stmt(&mut e, s, "(id z)").unwrap();
         assert_eq!(
             s.result.value.downcast_ref::<bool>().unwrap().clone(),
             false
         );
-        let s = eval_stmt("(id z)", s, &mut e).unwrap();
-        let s = eval_stmt("(id _)", s, &mut e).unwrap();
+        let s = eval_stmt(&mut e, s, "(id z)").unwrap();
+        let s = eval_stmt(&mut e, s, "(id _)").unwrap();
         assert_eq!(
             s.result.value.downcast_ref::<bool>().unwrap().clone(),
             false
         );
 
-        let s = eval_stmt("!-- id (id 555)", s, &mut e).unwrap();
-        let s = eval_stmt("id --", s, &mut e).unwrap();
+        let s = eval_stmt(&mut e, s, "!-- id (id 555)").unwrap();
+        let s = eval_stmt(&mut e, s, "id --").unwrap();
         assert_eq!(s.result.value.downcast_ref::<i64>().unwrap().clone(), 555);
 
-        let s = eval_stmt("!$3 id 3", s, &mut e).unwrap();
-        let s = eval_stmt("id $3", s, &mut e).unwrap();
+        let s = eval_stmt(&mut e, s, "!$3 id 3").unwrap();
+        let s = eval_stmt(&mut e, s, "id $3").unwrap();
         assert_eq!(s.result.value.downcast_ref::<i64>().unwrap().clone(), 3);
 
-        let s = eval_stmt("! id 2", s, &mut e).unwrap();
-        let s = eval_stmt("id $2", s, &mut e).unwrap();
+        let s = eval_stmt(&mut e, s, "! id 2").unwrap();
+        let s = eval_stmt(&mut e, s, "id $2").unwrap();
         assert_eq!(s.result.value.downcast_ref::<i64>().unwrap().clone(), 2);
 
-        let s = eval_stmt("! id 4", s, &mut e).unwrap();
-        let s = eval_stmt("id $4", s, &mut e).unwrap();
+        let s = eval_stmt(&mut e, s, "! id 4").unwrap();
+        let s = eval_stmt(&mut e, s, "id $4").unwrap();
         assert_eq!(s.result.value.downcast_ref::<i64>().unwrap().clone(), 4);
     }
 }
