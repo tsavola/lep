@@ -9,7 +9,7 @@ pub mod builtin;
 mod eval;
 mod parse;
 
-pub use eval::{eval_stmt, Env, Fun, FunMut, Pair, Ref, State, World};
+pub use eval::{eval_stmt, Domain, Fun, FunMut, Pair, Ref, State, World};
 
 /// Stringify (), bool, i64, String, Ref or Pair.  () is represented by the
 /// empty string.  String will be quoted.  None is returned if the type is not

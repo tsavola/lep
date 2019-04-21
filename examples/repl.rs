@@ -10,7 +10,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use rustyline::error::ReadlineError;
 use rustyline::Editor;
 
-use lep::{builtin, eval_stmt, stringify, Env, Fun, FunMut, State, World};
+use lep::{builtin, eval_stmt, stringify, Domain, Fun, FunMut, State, World};
 
 struct Sequence {
     n: i64,
@@ -46,12 +46,12 @@ fn main() {
     let mut sequence = Sequence { n: -1 };
     let time = Time {};
 
-    let mut env = Env::new();
-    builtin::register_all(&mut env);
-    env.register_mut("sequence", &mut sequence);
-    env.register("time", &time);
+    let mut domain = Domain::new();
+    builtin::register_all(&mut domain);
+    domain.register_mut("sequence", &mut sequence);
+    domain.register("time", &time);
 
-    let mut state = State::new(&env);
+    let mut state = State::new(&domain);
 
     let mut rl = Editor::<()>::new();
     let mut prefix = "".to_string();
@@ -61,7 +61,7 @@ fn main() {
             Ok(line) => {
                 rl.add_history_entry(line.as_ref());
 
-                match eval_stmt(&mut env, state.clone(), &line) {
+                match eval_stmt(&mut domain, state.clone(), &line) {
                     Ok(res) => {
                         if let Some(repr) = stringify(res.result.value.clone()) {
                             if repr.is_empty() {

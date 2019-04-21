@@ -125,12 +125,12 @@ Custom extension functions implement the `lep::Fun` or the `lep::FunMut` trait:
 struct Println;
 
 impl lep::Fun for Println {
-    fn invoke(&self, args: Vec<Rc<dyn Any>>) -> Option<Rc<dyn Any>> {
+    fn invoke(&self, world: &World, args: Vec<Rc<dyn Any>>) -> Result<Rc<dyn Any>, String> {
         for x in args {
             print!("{}", lep::stringify(x));
         }
         println!("");
-        Some(Rc::new(()))
+        Ok(world.nil())
     }
 }
 ```
@@ -162,22 +162,22 @@ The following values are considered untrue:
 
 ## Evaluation
 
-Extension functions are bound to a `lep::Env` object:
+Extension functions are bound to a `lep::Domain` object:
 
 ```rust
 let my_println = Println {};
-let mut env = lep::Env::new();
-lep::builtin::register_all(&mut env);
-env.register("println", &my_println);
+let mut domain = lep::Domain::new();
+lep::builtin::register_all(&mut domain);
+domain.register("println", &my_println);
 ```
 
 An evaluation iteration takes an existing `lep::State` and replaces it with a
 new one:
 
 ```rust
-let mut state = lep::State::new(&env);
+let mut state = lep::State::new(&domain);
 loop {
-    match lep::eval_stmt(read_line(), state.clone(), &mut env) {
+    match lep::eval_stmt(&mut domain, state.clone(), read_line()) {
         Ok(new_state) => {
             // Print result here.
             state = new_state;

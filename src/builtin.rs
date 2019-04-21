@@ -5,7 +5,7 @@
 use std::any::Any;
 use std::rc::Rc;
 
-use super::eval::{is_truthful, Env, Fun, Pair, World};
+use super::eval::{is_truthful, Domain, Fun, Pair, World};
 
 fn expected_i64() -> Result<Rc<dyn Any>, String> {
     Err("arithmetic function expects i64".to_string())
@@ -20,28 +20,47 @@ fn wrong_number_of_arguments() -> Result<Rc<dyn Any>, String> {
 }
 
 /// Register all optional built-in functions.
-pub fn register_all(env: &mut Env) {
-    env.register("+", &ADD);
-    env.register("-", &SUB);
-    env.register("*", &MUL);
-    env.register("/", &DIV);
-    env.register("car", &CAR);
-    env.register("cdr", &CDR);
-    env.register("cons", &CONS);
-    env.register("list", &LIST);
-    env.register("not", &NOT);
-    env.register("identity", &IDENTITY);
+pub fn register_all(d: &mut Domain) {
+    d.register("+", &ADD);
+    d.register("-", &SUB);
+    d.register("*", &MUL);
+    d.register("/", &DIV);
+    d.register("car", &CAR);
+    d.register("cdr", &CDR);
+    d.register("cons", &CONS);
+    d.register("list", &LIST);
+    d.register("not", &NOT);
+    d.register("identity", &IDENTITY);
 }
 
+/// The `+` function.
 pub static ADD: Add = Add {};
+
+/// The `-` function.
 pub static SUB: Sub = Sub {};
+
+/// The `*` function.
 pub static MUL: Mul = Mul {};
+
+/// The `/` function.
 pub static DIV: Div = Div {};
+
+/// The `car` function.
 pub static CAR: Car = Car {};
+
+/// The `cdr` function.
 pub static CDR: Cdr = Cdr {};
+
+/// The `cons` function.
 pub static CONS: Cons = Cons {};
+
+/// The `list` function.
 pub static LIST: List = List {};
+
+/// The `not` function.
 pub static NOT: Not = Not {};
+
+/// The `identity` function.
 pub static IDENTITY: Identity = Identity {};
 
 pub struct Add;
