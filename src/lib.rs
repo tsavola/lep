@@ -19,6 +19,18 @@ pub use eval::{eval_stmt, Domain, Fun, FunMut, Pair, Ref, State, World};
 /// empty string.  String will be quoted.  None is returned if the type is not
 /// supported.
 pub fn stringify(x: Rc<dyn Any>) -> Option<String> {
+    if let Some(_) = x.downcast_ref::<Pair>() {
+        let mut s = String::new();
+        s.push('(');
+        s.push_str(&stringify_inner(&x).unwrap());
+        s.push(')');
+        Some(s)
+    } else {
+        stringify_inner(&x)
+    }
+}
+
+fn stringify_inner(x: &Rc<dyn Any>) -> Option<String> {
     if let Some(_) = x.downcast_ref::<()>() {
         return Some("".to_string());
     }
@@ -46,11 +58,16 @@ pub fn stringify(x: Rc<dyn Any>) -> Option<String> {
 
     if let Some(p) = x.downcast_ref::<Pair>() {
         let mut s = String::new();
-        s.push('(');
         stringify_explicit(&mut s, &p.0);
-        s.push_str(" . ");
-        stringify_explicit(&mut s, &p.1);
-        s.push(')');
+        if let Some(_) = p.1.downcast_ref::<()>() {
+            // Nothing.
+        } else if let Some(_) = p.1.downcast_ref::<Pair>() {
+            s.push(' ');
+            s.push_str(&stringify_inner(&p.1).unwrap());
+        } else {
+            s.push_str(" . ");
+            stringify_explicit(&mut s, &p.1);
+        }
         return Some(s);
     }
 
@@ -66,5 +83,30 @@ fn stringify_explicit(dest: &mut String, x: &Rc<dyn Any>) {
         dest.push_str(&s);
     } else {
         dest.push('?');
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_list() {
+        assert_eq!(
+            stringify(Rc::new(Pair(Rc::new(1 as i64), Rc::new(2 as i64)))).unwrap(),
+            "(1 . 2)"
+        );
+
+        assert_eq!(
+            stringify(Rc::new(Pair(
+                Rc::new(1 as i64),
+                Rc::new(Pair(
+                    Rc::new(2 as i64),
+                    Rc::new(Pair(Rc::new(3 as i64), Rc::new(())))
+                ))
+            )))
+            .unwrap(),
+            "(1 2 3)"
+        );
     }
 }

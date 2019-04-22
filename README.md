@@ -47,8 +47,10 @@ Examples:
     >> * (/ (- 10 5) 2) 50
     100
     >> ()
+    >> cons 1 2
+    (1 . 2)
     >> list 1 2
-    (1 . (2 . ()))
+    (1 2)
     >> ! + 1 2 3
     $1 = 6
     >> !x + 1 2 3
@@ -87,8 +89,8 @@ Some expressions cannot be written without outer parentheses:
 When the first term is a variable or a literal and there are multiple terms,
 the expression is quoted:
 
-    >> 1 2
-    (1 . (2 . ()))
+    >> 1 2 3
+    (1 2 3)
 
 A statement consisting only of whitespace yields `()` and leaves the variables
 unchanged.  When the user inputs an empty line, the embedder program doesn't
