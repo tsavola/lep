@@ -158,9 +158,11 @@ pub fn register_sub(d: &mut Domain) {
 /// The `-` function.
 pub fn sub(args: &Obj) -> Result<Obj, String> {
     if let Some(pair) = args.downcast_ref::<Pair>() {
-        if let Some(minuend) = pair.0.downcast_ref::<i64>() {
-            if let Some(subtrahend) = sum(0, &pair.1) {
-                return Ok(obj::int(minuend - subtrahend));
+        if let Some(first) = pair.0.downcast_ref::<i64>() {
+            if pair.1.is::<()>() {
+                return Ok(obj::int(-first));
+            } else if let Some(subtrahend) = sum(0, &pair.1) {
+                return Ok(obj::int(first - subtrahend));
             }
         }
 
