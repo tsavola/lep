@@ -142,7 +142,7 @@ pub fn register_add(d: &mut Domain) {
     d.register("+", add);
 }
 
-// The `+` function.
+/// The `+` function.
 pub fn add(args: &Obj) -> Result<Obj, String> {
     match sum(0, args) {
         Some(n) => Ok(obj::int(n)),
@@ -155,7 +155,7 @@ pub fn register_sub(d: &mut Domain) {
     d.register("-", sub);
 }
 
-// The `-` function.
+/// The `-` function.
 pub fn sub(args: &Obj) -> Result<Obj, String> {
     if let Some(pair) = args.downcast_ref::<Pair>() {
         if let Some(minuend) = pair.0.downcast_ref::<i64>() {
@@ -175,7 +175,7 @@ pub fn register_mul(d: &mut Domain) {
     d.register("*", mul);
 }
 
-// The `*` function.
+/// The `*` function.
 pub fn mul(args: &Obj) -> Result<Obj, String> {
     match product(1, args) {
         Some(n) => Ok(obj::int(n)),
@@ -200,7 +200,7 @@ pub fn register_div(d: &mut Domain) {
     d.register("/", div);
 }
 
-// The `/` function.
+/// The `/` function.
 pub fn div(args: &Obj) -> Result<Obj, String> {
     if let Some(pair) = args.downcast_ref::<Pair>() {
         if pair.1.is::<Pair>() {
@@ -222,7 +222,7 @@ pub fn register_car(d: &mut Domain) {
     d.register("car", car);
 }
 
-// The `car` function.
+/// The `car` function.
 pub fn car(args: &Obj) -> Result<Obj, String> {
     if let Some(list) = args.downcast_ref::<Pair>() {
         if list.1.is::<()>() {
@@ -242,7 +242,7 @@ pub fn register_cdr(d: &mut Domain) {
     d.register("cdr", cdr);
 }
 
-// The `cdr` function.
+/// The `cdr` function.
 pub fn cdr(args: &Obj) -> Result<Obj, String> {
     if let Some(list) = args.downcast_ref::<Pair>() {
         if list.1.is::<()>() {
@@ -262,7 +262,7 @@ pub fn register_cons(d: &mut Domain) {
     d.register("cons", cons);
 }
 
-// The `cons` function.
+/// The `cons` function.
 pub fn cons(args: &Obj) -> Result<Obj, String> {
     if let Some(head) = args.downcast_ref::<Pair>() {
         if let Some(tail) = head.1.downcast_ref::<Pair>() {
@@ -280,7 +280,7 @@ pub fn register_list(d: &mut Domain) {
     d.register("list", list);
 }
 
-// The `list` function.
+/// The `list` function.
 pub fn list(args: &Obj) -> Result<Obj, String> {
     Ok(args.clone())
 }
@@ -290,7 +290,7 @@ pub fn register_not(d: &mut Domain) {
     d.register("not", not);
 }
 
-// The `not` function.
+/// The `not` function.
 pub fn not(args: &Obj) -> Result<Obj, String> {
     if let Some(pair) = args.downcast_ref::<Pair>() {
         if pair.1.is::<()>() {
@@ -306,7 +306,7 @@ pub fn register_identity(d: &mut Domain) {
     d.register("identity", identity);
 }
 
-// The `identity` function.
+/// The `identity` function.
 pub fn identity(args: &Obj) -> Result<Obj, String> {
     if let Some(pair) = args.downcast_ref::<Pair>() {
         if pair.1.is::<()>() {
