@@ -249,7 +249,7 @@ pub fn cdr(args: &Obj) -> Result<Obj, String> {
     if let Some(list) = args.downcast_ref::<Pair>() {
         if list.1.is::<()>() {
             return if let Some(arg) = list.0.downcast_ref::<Pair>() {
-                Ok(arg.0.clone())
+                Ok(arg.1.clone())
             } else {
                 expected_pair()
             };
