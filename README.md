@@ -28,7 +28,7 @@ Statement syntax (both parts are optional):
 The variable name is any character string excluding whitespace, `(` and `)`.
 The expression is an otherwise usual
 [S-expression](https://en.wikipedia.org/wiki/S-expression), but the outermost
-parentheses may be omitted in some cases (when the first term is an atom).
+parentheses may be omitted.
 
 The statement yields the value of the expression.  If the `!` prefix is
 present, the value is also assigned to a variable.  If variable name is empty,
@@ -79,13 +79,6 @@ possible to directly get a reference to a function.  However, the built-in
     >> _ "bar"
     bar
 
-Some expressions cannot be written without outer parentheses:
-
-    >> (choose-operator) arg
-    error
-    >> ((choose-operator) arg)
-    ok
-
 When the first term is a variable or a literal and there are multiple terms,
 the expression is quoted:
 
@@ -99,16 +92,11 @@ need to evaluate it, and may do something else instead.
 
 ## Functions
 
-Special forms are implemented internally:
+Built-in functions:
 
 ```scheme
 (and arg1 arg2 ...)
 (or arg1 arg2 ...)
-```
-
-Optional built-in functions:
-
-```scheme
 (+ arg1 arg2 ...)
 (- arg1 arg2 ...)
 (* arg1 arg2 ...)
@@ -121,29 +109,18 @@ Optional built-in functions:
 (identity arg)
 ```
 
-Custom extension functions implement the `lep::Fun` or the `lep::FunMut` trait:
-
-```rust
-struct Println;
-
-impl lep::Fun for Println {
-    fn invoke(&self, world: &World, args: Vec<Rc<dyn Any>>) -> Result<Rc<dyn Any>, String> {
-        for x in args {
-            print!("{}", lep::stringify(x));
-        }
-        println!("");
-        Ok(world.nil())
-    }
-}
-```
+Custom extension functions have signature
+`fn(args: &Rc<dyn Any>) -> Result<Rc<dyn Any>, String>`
+or implement the `lep::Fun` or the `lep::FunMut` trait.
 
 
 ## Types
 
-Lep has a dynamic and open-ended type system.  Type `Rc<dyn Any>` is used to
-pass immutable values to and from functions.  Extension functions may return
-and accept custom types, but they cannot be used with built-in arithmetic
-functions, and logical functions will treat their values as truthful.
+Lep has a dynamic and open-ended type system.  Type `Rc<dyn Any>` (aliased as
+`lep::Obj`) is used to pass immutable values to and from functions.  Extension
+functions may return and accept custom types, but they cannot be used with
+built-in arithmetic functions, and logical functions will treat their values as
+truthful.
 
 Fully supported types:
 
@@ -167,17 +144,16 @@ The following values are considered untrue:
 Extension functions are bound to a `lep::Domain` object:
 
 ```rust
-let my_println = Println {};
 let mut domain = lep::Domain::new();
-lep::builtin::register_all(&mut domain);
-domain.register("println", &my_println);
+lep::builtin::register(&mut domain);
+domain.register("nop", |args: &lep::Obj| Ok(lep::obj::nil()));
 ```
 
 An evaluation iteration takes an existing `lep::State` and replaces it with a
 new one:
 
 ```rust
-let mut state = lep::State::new(&domain);
+let mut state = lep::State::new();
 loop {
     match lep::eval_stmt(&mut domain, state.clone(), read_line()) {
         Ok(new_state) => {

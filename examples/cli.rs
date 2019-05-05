@@ -17,13 +17,13 @@ fn main() {
     }
 
     let mut domain = Domain::new();
-    builtin::register_all(&mut domain);
+    builtin::register(&mut domain);
 
-    let state = State::new(&domain);
+    let state = State::new();
 
     match eval_stmt(&mut domain, state, &line) {
         Ok(state) => {
-            if let Some(repr) = stringify(state.result.value.clone()) {
+            if let Some(repr) = stringify(&state.result.value) {
                 if repr.len() > 0 {
                     println!("{}", repr);
                 }

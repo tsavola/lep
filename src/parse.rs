@@ -2,49 +2,35 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-pub enum Expr<'a> {
-    Pair(Box<Pair<'a>>),
-    Atom(&'a str),
-    Nil,
-}
+use std::rc::Rc;
 
-pub struct Pair<'a>(pub Expr<'a>, pub Expr<'a>);
+use super::obj;
+use super::obj::Obj;
 
-pub fn parse_stmt(s: &str) -> Result<Expr, String> {
-    let s = s.trim_start();
+#[derive(Eq, PartialEq)]
+pub struct Name(pub String);
+
+pub fn parse_stmt(s: &str) -> Result<(Obj, bool), String> {
+    let mut s = s.trim_start();
+    let mut paren = false;
 
     if s.starts_with("(") {
-        parse(s)
+        s = &s[1..];
+        paren = true;
+    }
+
+    let (car, n) = parse_tail(s, paren)?;
+    let t = s[s.len() - n..].trim_start();
+    if t.len() == 0 {
+        Ok((car, paren))
     } else {
-        match parse_tail(s, false) {
-            Ok((expr, n)) => {
-                if s[s.len() - n..].trim().len() == 0 {
-                    Ok(expr)
-                } else {
-                    Err("statement parse error".to_string())
-                }
-            }
-
-            Err(msg) => Err(msg),
-        }
+        // Trailing terms after parenthesized first term; add top-level pair.
+        let (cdr, _) = parse_tail(t, false)?;
+        Ok((obj::pair(car, cdr), false))
     }
 }
 
-fn parse(s: &str) -> Result<Expr, String> {
-    match parse_expr(s) {
-        Ok((expr, n)) => {
-            if s[s.len() - n..].trim().len() == 0 {
-                Ok(expr)
-            } else {
-                Err("expression parse error".to_string())
-            }
-        }
-
-        Err(msg) => Err(msg),
-    }
-}
-
-fn parse_expr(s: &str) -> Result<(Expr, usize), String> {
+pub fn parse_expr(s: &str) -> Result<(Obj, usize), String> {
     let s = s.trim_start();
 
     match s.chars().nth(0).unwrap() {
@@ -53,16 +39,69 @@ fn parse_expr(s: &str) -> Result<(Expr, usize), String> {
     }
 }
 
-fn parse_atom(s: &str) -> Result<(Expr, usize), String> {
+fn parse_atom(s: &str) -> Result<(Obj, usize), String> {
     if s.chars().nth(0).unwrap() == '"' {
-        return parse_string(s);
+        parse_string(s)
+    } else {
+        parse_nonstring(s)
+    }
+}
+
+fn parse_string(s: &str) -> Result<(Obj, usize), String> {
+    let mut it = s.chars().enumerate();
+    it.next(); // Skip first quote.
+
+    let mut offset = 1;
+    let mut buf = String::new();
+    let mut escape = false;
+
+    for (i, c) in it {
+        offset += c.len_utf8();
+
+        if escape {
+            match c {
+                't' => buf.push('\t'),
+                'n' => buf.push('\n'),
+                'r' => buf.push('\r'),
+                _ => buf.push(c),
+            }
+
+            escape = false;
+        } else {
+            match c {
+                '\\' => {
+                    escape = true;
+                }
+
+                '"' => {
+                    let i = i + 1; // Skip last quote.
+
+                    if let Some(c) = s.chars().nth(i) {
+                        if !(c == ')' || c.is_whitespace()) {
+                            return Err("garbage after string literal".to_string());
+                        }
+                    }
+
+                    return Ok((obj::string(buf), s.len() - offset));
+                }
+
+                _ => buf.push(c),
+            }
+        }
     }
 
+    Err("string literal has no closing quote".to_string())
+}
+
+fn parse_nonstring(s: &str) -> Result<(Obj, usize), String> {
     let mut offset = 0;
 
     for c in s.chars() {
         if c == ')' || c.is_whitespace() {
-            return Ok((Expr::Atom(&s[..offset]), s.len() - offset));
+            return match atom_object(&s[..offset]) {
+                Ok(x) => Ok((x, s.len() - offset)),
+                Err(msg) => Err(msg),
+            };
         }
 
         if c == '(' {
@@ -72,49 +111,42 @@ fn parse_atom(s: &str) -> Result<(Expr, usize), String> {
         offset += c.len_utf8();
     }
 
-    Ok((Expr::Atom(s), 0))
+    match atom_object(s) {
+        Ok(x) => Ok((x, 0)),
+        Err(msg) => Err(msg),
+    }
 }
 
-fn parse_string(s: &str) -> Result<(Expr, usize), String> {
-    let mut it = s.chars().enumerate();
-    it.next(); // Skip first quote.
+fn atom_object(s: &str) -> Result<Obj, String> {
+    match s {
+        "false" => Ok(obj::boolean(false)),
+        "true" => Ok(obj::boolean(true)),
 
-    let mut offset = 1;
-    let mut skip = false;
-
-    for (i, c) in it {
-        offset += c.len_utf8();
-
-        if skip {
-            skip = false;
-            continue;
-        }
-
-        match c {
-            '\\' => {
-                skip = true;
-            }
-
-            '"' => {
-                let i = i + 1; // Skip last quote.
-
-                if let Some(c) = s.chars().nth(i) {
-                    if !(c == ')' || c.is_whitespace()) {
-                        return Err("garbage after string literal".to_string());
+        _ => {
+            let c = s.chars().nth(0).unwrap();
+            if c == '-' {
+                if let Some(c) = s.chars().nth(1) {
+                    if c >= '0' && c <= '9' {
+                        return atom_int(s);
                     }
                 }
-
-                return Ok((Expr::Atom(&s[..offset]), s.len() - offset));
+            } else if c >= '0' && c <= '9' {
+                return atom_int(s);
             }
 
-            _ => {}
+            Ok(Rc::new(Name(s.to_string())))
         }
     }
-
-    Err("string literal has no closing quote".to_string())
 }
 
-fn parse_tail(s: &str, paren: bool) -> Result<(Expr, usize), String> {
+fn atom_int(s: &str) -> Result<Obj, String> {
+    match s.parse() {
+        Ok(n) => Ok(obj::int(n)),
+        Err(e) => Err(e.to_string()),
+    }
+}
+
+fn parse_tail(s: &str, paren: bool) -> Result<(Obj, usize), String> {
     let s = s.trim_start();
 
     if let Some(c) = s.chars().nth(0) {
@@ -125,34 +157,44 @@ fn parse_tail(s: &str, paren: bool) -> Result<(Expr, usize), String> {
                 }
             }
 
-            return Ok((Expr::Nil, s.len() - 1));
+            return Ok((obj::nil(), s.len() - 1));
         }
 
-        match parse_expr(s) {
-            Ok((car, n)) => match parse_tail(&s[s.len() - n..], paren) {
-                Ok((cdr, n)) => Ok((Expr::Pair(Box::new(Pair(car, cdr))), n)),
-                Err(msg) => Err(msg),
-            },
-
-            Err(msg) => Err(msg),
-        }
+        let (car, n) = parse_expr(s)?;
+        let (cdr, n) = parse_tail(&s[s.len() - n..], paren)?;
+        Ok((obj::pair(car, cdr), n))
     } else if paren {
         Err("expression has no closing paren".to_string())
     } else {
-        Ok((Expr::Nil, 0))
+        Ok((obj::nil(), 0))
     }
 }
 
 #[cfg(test)]
 mod tests {
+    use super::obj::{Obj, Pair};
     use super::*;
+
+    fn parse(s: &str) -> Result<Obj, String> {
+        match parse_expr(s) {
+            Ok((obj, n)) => {
+                if s[s.len() - n..].trim().len() == 0 {
+                    Ok(obj)
+                } else {
+                    Err("expression parse error".to_string())
+                }
+            }
+
+            Err(msg) => Err(msg),
+        }
+    }
 
     #[test]
     fn test_parse_atom() {
-        match parse("foo").unwrap() {
-            Expr::Atom(s) => assert_eq!(s, "foo"),
-            _ => assert!(false),
-        }
+        assert_eq!(
+            parse("foo").unwrap().downcast_ref::<Name>().unwrap().0,
+            "foo"
+        );
 
         assert!(parse("foo bar").is_err());
         assert!(parse("foo)").is_err());
@@ -162,15 +204,18 @@ mod tests {
 
     #[test]
     fn test_parse_string() {
-        match parse(r#""foo""#).unwrap() {
-            Expr::Atom(s) => assert_eq!(s, r#""foo""#),
-            _ => assert!(false),
-        }
+        assert_eq!(
+            *parse(r#""foo""#).unwrap().downcast_ref::<String>().unwrap(),
+            "foo"
+        );
 
-        match parse(r#""foo bar""#).unwrap() {
-            Expr::Atom(s) => assert_eq!(s, r#""foo bar""#),
-            _ => assert!(false),
-        }
+        assert_eq!(
+            *parse(r#""foo bar""#)
+                .unwrap()
+                .downcast_ref::<String>()
+                .unwrap(),
+            "foo bar"
+        );
 
         assert!(parse(r#""foo" bar"#).is_err());
         assert!(parse(r#""foo"bar"#).is_err());
@@ -178,106 +223,60 @@ mod tests {
         assert!(parse(r#""foo")"#).is_err());
         assert!(parse(r#""foo" ()"#).is_err());
 
-        match parse(r#""foo\n""#).unwrap() {
-            Expr::Atom(s) => assert_eq!(s, r#""foo\n""#),
-            _ => assert!(false),
-        }
+        assert_eq!(
+            *parse(r#""foo\n""#)
+                .unwrap()
+                .downcast_ref::<String>()
+                .unwrap(),
+            "foo\n"
+        );
 
-        match parse(r#""\"foo\"""#).unwrap() {
-            Expr::Atom(s) => assert_eq!(s, r#""\"foo\"""#),
-            _ => assert!(false),
-        }
+        assert_eq!(
+            *parse(r#""\"foo\"""#)
+                .unwrap()
+                .downcast_ref::<String>()
+                .unwrap(),
+            r#""foo""#
+        );
     }
 
     #[test]
     fn test_parse_stmt() {
-        match parse_stmt("(foo)").unwrap() {
-            Expr::Pair(p) => {
-                match p.0 {
-                    Expr::Atom(s) => assert_eq!(s, "foo"),
-                    _ => assert!(false),
-                }
-                match p.1 {
-                    Expr::Nil => {}
-                    _ => assert!(false),
-                }
-            }
-            _ => assert!(false),
-        }
+        let r = parse_stmt("(foo)").unwrap();
+        let p = r.0.downcast_ref::<Pair>().unwrap();
+        assert_eq!(p.0.downcast_ref::<Name>().unwrap().0, "foo");
+        p.1.downcast_ref::<()>().unwrap();
 
-        match parse_stmt(" ( foo ) ").unwrap() {
-            Expr::Pair(p) => {
-                match p.0 {
-                    Expr::Atom(s) => assert_eq!(s, "foo"),
-                    _ => assert!(false),
-                }
-                match p.1 {
-                    Expr::Nil => {}
-                    _ => assert!(false),
-                }
-            }
-            _ => assert!(false),
-        }
+        let r = parse_stmt(" ( foo ) ").unwrap();
+        let p = r.0.downcast_ref::<Pair>().unwrap();
+        assert_eq!(p.0.downcast_ref::<Name>().unwrap().0, "foo");
+        p.1.downcast_ref::<()>().unwrap();
 
-        match parse_stmt(r#"("foo")"#).unwrap() {
-            Expr::Pair(p) => {
-                match p.0 {
-                    Expr::Atom(s) => assert_eq!(s, r#""foo""#),
-                    _ => assert!(false),
-                }
-                match p.1 {
-                    Expr::Nil => {}
-                    _ => assert!(false),
-                }
-            }
-            _ => assert!(false),
-        }
+        let r = parse_stmt(r#"("foo")"#).unwrap();
+        let p = r.0.downcast_ref::<Pair>().unwrap();
+        assert_eq!(*p.0.downcast_ref::<String>().unwrap(), "foo");
+        p.1.downcast_ref::<()>().unwrap();
 
-        match parse_stmt("(foo 123)").unwrap() {
-            Expr::Pair(p) => {
-                match p.0 {
-                    Expr::Atom(s) => assert_eq!(s, "foo"),
-                    _ => assert!(false),
-                }
-                match p.1 {
-                    Expr::Pair(p) => {
-                        match p.0 {
-                            Expr::Atom(s) => assert_eq!(s, "123"),
-                            _ => assert!(false),
-                        }
-                        match p.1 {
-                            Expr::Nil => {}
-                            _ => assert!(false),
-                        }
-                    }
-                    _ => assert!(false),
-                }
-            }
-            _ => assert!(false),
-        }
+        let r = parse_stmt("(foo 123)").unwrap();
+        let head = r.0.downcast_ref::<Pair>().unwrap();
+        assert_eq!(head.0.downcast_ref::<Name>().unwrap().0, "foo");
+        let tail = head.1.downcast_ref::<Pair>().unwrap();
+        assert_eq!(*tail.0.downcast_ref::<i64>().unwrap(), 123);
+        tail.1.downcast_ref::<()>().unwrap();
 
-        match parse_stmt(r#"(foo "bar")"#).unwrap() {
-            Expr::Pair(p) => {
-                match p.0 {
-                    Expr::Atom(s) => assert_eq!(s, "foo"),
-                    _ => assert!(false),
-                }
-                match p.1 {
-                    Expr::Pair(p) => {
-                        match p.0 {
-                            Expr::Atom(s) => assert_eq!(s, r#""bar""#),
-                            _ => assert!(false),
-                        }
-                        match p.1 {
-                            Expr::Nil => {}
-                            _ => assert!(false),
-                        }
-                    }
-                    _ => assert!(false),
-                }
-            }
-            _ => assert!(false),
-        }
+        let r = parse_stmt(r#"(foo "bar")"#).unwrap();
+        let head = r.0.downcast_ref::<Pair>().unwrap();
+        assert_eq!(head.0.downcast_ref::<Name>().unwrap().0, "foo");
+        let tail = head.1.downcast_ref::<Pair>().unwrap();
+        assert_eq!(*tail.0.downcast_ref::<String>().unwrap(), "bar");
+        tail.1.downcast_ref::<()>().unwrap();
+
+        let r = parse_stmt("(foo) bar").unwrap();
+        let head = r.0.downcast_ref::<Pair>().unwrap();
+        head.0.downcast_ref::<Pair>().unwrap();
+        let tail = head.1.downcast_ref::<Pair>().unwrap();
+        assert_eq!(tail.0.downcast_ref::<Name>().unwrap().0, "bar");
+        tail.1.downcast_ref::<()>().unwrap();
 
         parse_stmt(r#"foo()"#).is_err();
         parse_stmt(r#"(foo)()"#).is_err();

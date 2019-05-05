@@ -2,25 +2,23 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-use std::any::Any;
 use std::process::exit;
-use std::rc::Rc;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use rustyline::error::ReadlineError;
 use rustyline::Editor;
 
-use lep::{builtin, eval_stmt, stringify, Domain, Fun, FunMut, State, World};
+use lep::{builtin, eval_stmt, obj, stringify, Domain, Fun, FunMut, Obj, State};
 
 struct Sequence {
     n: i64,
 }
 
 impl FunMut for Sequence {
-    fn invoke(&mut self, _: &World, args: Vec<Rc<dyn Any>>) -> Result<Rc<dyn Any>, String> {
-        if args.len() == 0 {
+    fn invoke(&mut self, args: &Obj) -> Result<Obj, String> {
+        if args.is::<()>() {
             self.n += 1;
-            Ok(Rc::new(self.n))
+            Ok(obj::int(self.n))
         } else {
             Err("sequence: too many arguments".to_string())
         }
@@ -30,10 +28,10 @@ impl FunMut for Sequence {
 struct Time;
 
 impl Fun for Time {
-    fn invoke(&self, _: &World, args: Vec<Rc<dyn Any>>) -> Result<Rc<dyn Any>, String> {
-        if args.is_empty() {
+    fn invoke(&self, args: &Obj) -> Result<Obj, String> {
+        if args.is::<()>() {
             match SystemTime::now().duration_since(UNIX_EPOCH) {
-                Ok(n) => Ok(Rc::new(n.as_secs() as i64)),
+                Ok(n) => Ok(obj::int(n.as_secs() as i64)),
                 Err(e) => Err(format!("time: {}", e)),
             }
         } else {
@@ -47,11 +45,11 @@ fn main() {
     let time = Time {};
 
     let mut domain = Domain::new();
-    builtin::register_all(&mut domain);
-    domain.register_mut("sequence", &mut sequence);
-    domain.register("time", &time);
+    builtin::register(&mut domain);
+    domain.register_fun_mut("sequence", &mut sequence);
+    domain.register_fun("time", &time);
 
-    let mut state = State::new(&domain);
+    let mut state = State::new();
 
     let mut rl = Editor::<()>::new();
     let mut prefix = "".to_string();
@@ -63,19 +61,17 @@ fn main() {
 
                 match eval_stmt(&mut domain, state.clone(), &line) {
                     Ok(res) => {
-                        if let Some(repr) = stringify(res.result.value.clone()) {
-                            if repr.is_empty() {
-                                if res.result.name == "_" {
-                                    prefix = "".to_string();
-                                } else if !res.result.name.is_empty() {
-                                    println!("{} = ()", res.result.name);
-                                }
-                            } else {
-                                if res.result.name == "_" {
-                                    prefix = repr + " ";
-                                } else if !res.result.name.is_empty() {
-                                    println!("{} = {}", res.result.name, repr);
-                                }
+                        if res.result.value.is::<()>() {
+                            if res.result.name == "_" {
+                                prefix = "".to_string();
+                            } else if !res.result.name.is_empty() {
+                                println!("{} = ()", res.result.name);
+                            }
+                        } else if let Some(repr) = stringify(&res.result.value) {
+                            if res.result.name == "_" {
+                                prefix = repr + " ";
+                            } else if !res.result.name.is_empty() {
+                                println!("{} = {}", res.result.name, repr);
                             }
                         } else {
                             if res.result.name == "_" {

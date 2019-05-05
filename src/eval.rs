@@ -2,24 +2,17 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-use std::any::Any;
 use std::collections::HashMap;
-use std::num::ParseIntError;
 use std::rc::Rc;
 use std::result::Result;
 
-use super::parse;
-use super::parse::Expr;
+use super::obj;
+use super::obj::{Obj, Pair};
+use super::parse::{parse_stmt, Name};
 
-static UNDERSCORE: Expr = Expr::Atom("_");
-
-/// Pair may be a node in a singly linked list.
-pub struct Pair(pub Rc<dyn Any>, pub Rc<dyn Any>);
-
-/// Ref is a native object stored in an `Rc<dyn Any>`.
+/// Ref is a native object stored in an Obj.
 pub struct Ref {
     name: &'static str,
-    form: bool, // Internal form or extension function?
 }
 
 impl ToString for Ref {
@@ -32,131 +25,89 @@ impl ToString for Ref {
     }
 }
 
-/// World of primitive values.
-pub struct World {
-    nil_: Rc<dyn Any>,
-    false_: Rc<dyn Any>,
-    true_: Rc<dyn Any>,
-}
-
-impl World {
-    fn new() -> Self {
-        World {
-            nil_: Rc::new(()),
-            false_: Rc::new(false),
-            true_: Rc::new(true),
-        }
-    }
-
-    /// Returns the `()` object.
-    pub fn nil(&self) -> Rc<dyn Any> {
-        self.nil_.clone()
-    }
-
-    /// Returns the `true` object or the `false` object.
-    pub fn boolean(&self, value: bool) -> Rc<dyn Any> {
-        if value {
-            self.true_.clone()
-        } else {
-            self.false_.clone()
-        }
-    }
-}
-
-struct Form {
-    value: Rc<dyn Any>,
-    f: fn(&Expr, &mut Frame) -> Result<Rc<dyn Any>, String>,
-}
-
 /// Fun is an extension function object.
 pub trait Fun {
-    fn invoke(&self, w: &World, args: Vec<Rc<dyn Any>>) -> Result<Rc<dyn Any>, String>;
+    fn invoke(&self, list: &Obj) -> Result<Obj, String>;
 }
 
 /// FunMut is an extension function object with side-effects.
 pub trait FunMut {
-    fn invoke(&mut self, w: &World, args: Vec<Rc<dyn Any>>) -> Result<Rc<dyn Any>, String>;
+    fn invoke(&mut self, list: &Obj) -> Result<Obj, String>;
 }
 
-struct ExtFun<'f> {
-    value: Rc<dyn Any>,
-    fun: Option<&'f Fun>,
-    fun_mut: Option<&'f mut FunMut>,
+pub enum FnImpl<'f> {
+    Eval(fn(&mut Frame, &Obj) -> Result<Obj, String>),
+    Fn(fn(&Obj) -> Result<Obj, String>),
+    Fun(&'f Fun),
+    FunMut(&'f mut FunMut),
+}
+
+pub struct FnEntry<'f> {
+    pub imp: FnImpl<'f>,
+    obj: Obj,
 }
 
 /// Domain of extension functions.
 pub struct Domain<'f> {
-    world: World,
-    forms: HashMap<&'static str, Form>,
-    exts: HashMap<&'static str, ExtFun<'f>>,
+    entries: HashMap<&'static str, FnEntry<'f>>,
 }
 
 impl<'f> Domain<'f> {
     pub fn new() -> Self {
-        let mut domain = Domain {
-            world: World::new(),
-            forms: HashMap::new(),
-            exts: HashMap::new(),
-        };
-
-        domain.forms.insert(
-            "and",
-            Form {
-                value: Rc::new(Ref {
-                    name: "and",
-                    form: true,
-                }),
-                f: eval_and,
-            },
-        );
-
-        domain.forms.insert(
-            "or",
-            Form {
-                value: Rc::new(Ref {
-                    name: "or",
-                    form: true,
-                }),
-                f: eval_or,
-            },
-        );
-
-        domain
+        Domain {
+            entries: HashMap::new(),
+        }
     }
 
-    pub fn register(&mut self, name: &'static str, f: &'f Fun) {
-        self.exts.insert(
+    pub fn register(&mut self, name: &'static str, f: fn(&Obj) -> Result<Obj, String>) {
+        self.entries.insert(
             name,
-            ExtFun {
-                value: Rc::new(Ref {
-                    name: name,
-                    form: false,
-                }),
-                fun: Some(f),
-                fun_mut: None,
+            FnEntry {
+                imp: FnImpl::Fn(f),
+                obj: Rc::new(Ref { name: name }),
             },
         );
     }
 
-    pub fn register_mut(&mut self, name: &'static str, f: &'f mut FunMut) {
-        self.exts.insert(
+    pub fn register_fun(&mut self, name: &'static str, f: &'f Fun) {
+        self.entries.insert(
             name,
-            ExtFun {
-                value: Rc::new(Ref {
-                    name: name,
-                    form: false,
-                }),
-                fun: None,
-                fun_mut: Some(f),
+            FnEntry {
+                imp: FnImpl::Fun(f),
+                obj: Rc::new(Ref { name: name }),
             },
         );
     }
+
+    pub fn register_fun_mut(&mut self, name: &'static str, f: &'f mut FunMut) {
+        self.entries.insert(
+            name,
+            FnEntry {
+                imp: FnImpl::FunMut(f),
+                obj: Rc::new(Ref { name: name }),
+            },
+        );
+    }
+}
+
+pub fn register_eval(
+    domain: &mut Domain,
+    name: &'static str,
+    f: fn(&mut Frame, &Obj) -> Result<Obj, String>,
+) {
+    domain.entries.insert(
+        name,
+        FnEntry {
+            imp: FnImpl::Eval(f),
+            obj: Rc::new(Ref { name: name }),
+        },
+    );
 }
 
 #[derive(Clone)]
 pub struct Binding {
     pub name: String,
-    pub value: Rc<dyn Any>,
+    pub value: Obj,
 }
 
 /// Incrementally constructed state.
@@ -167,188 +118,183 @@ pub struct State {
 }
 
 impl State {
-    pub fn new(domain: &Domain) -> Self {
+    pub fn new() -> Self {
         State {
             inner: Rc::new(StateLayer {
                 parent: None,
                 name: "_".to_string(),
-                value: domain.world.nil(),
+                value: obj::nil(),
             }),
             result: Binding {
                 name: "".to_string(),
-                value: domain.world.nil(),
+                value: obj::nil(),
             },
         }
     }
 }
 
-struct StateLayer {
-    parent: Option<Rc<StateLayer>>,
-    name: String,
-    value: Rc<dyn Any>,
+pub struct StateLayer {
+    pub parent: Option<Rc<StateLayer>>,
+    pub name: String,
+    pub value: Obj,
 }
 
-struct Frame<'m, 'f> {
-    domain: &'m mut Domain<'f>,
-    state: Rc<StateLayer>,
+pub struct Frame<'m, 'f> {
+    pub domain: &'m mut Domain<'f>,
+    pub state: Rc<StateLayer>,
+}
+
+impl<'m, 'f> Frame<'m, 'f> {
+    pub fn lookup_ref(&mut self, fref: &Ref) -> Option<&mut FnEntry<'f>> {
+        self.domain.entries.get_mut(fref.name)
+    }
 }
 
 /// Parse and evaluate a statement.  A derived state with the result value is
 /// returned.
 pub fn eval_stmt<'m>(domain: &'m mut Domain, state: State, s: &str) -> Result<State, String> {
-    if s.trim().len() == 0 {
+    if s.trim_start().len() == 0 {
         return Ok(State {
             inner: state.inner,
             result: Binding {
                 name: "".to_string(),
-                value: domain.world.nil(),
+                value: obj::nil(),
             },
         });
     }
 
-    match parse::parse_stmt(s) {
-        Ok(ref expr) => {
-            let mut frame = Frame {
-                domain: domain,
-                state: state.inner.clone(),
-            };
+    let (stmt, paren) = parse_stmt(s)?;
 
-            let mut expr = expr;
-            let mut name = "_".to_string();
+    let mut var = "_".to_string();
 
-            if let Expr::Pair(p) = expr {
-                if let Expr::Atom(s) = p.0 {
-                    if s.starts_with("!") {
-                        if s.len() == 1 {
-                            name = choose_name(&frame);
-                        } else {
-                            name = s[1..].to_string();
-                        }
+    let mut frame = Frame {
+        domain: domain,
+        state: state.inner.clone(),
+    };
 
-                        expr = match p.1 {
-                            Expr::Pair(_) => &p.1,
-                            Expr::Atom(_) => panic!(),
-                            Expr::Nil => &UNDERSCORE,
-                        }
-                    }
-                }
-            }
+    let value = if paren {
+        eval_expr(&mut frame, &stmt)
+    } else {
+        let head = stmt.downcast_ref::<Pair>().unwrap();
 
-            match eval_stmt_expr(&expr, &mut frame, !s.trim_start().starts_with("(")) {
-                Ok(value) => {
-                    let mut new = Rc::new(StateLayer {
-                        parent: state.inner.parent.clone(), // Skip innermost layer with old _ value.
-                        name: name.to_string(),
-                        value: value.clone(),
-                    });
-
-                    if name != "_" {
-                        // Bubble old _ value up to innermost new layer.
-                        new = Rc::new(StateLayer {
-                            parent: Some(new),
-                            name: "_".to_string(),
-                            value: state.inner.value.clone(),
-                        });
-                    }
-
-                    return Ok(State {
-                        inner: new,
-                        result: Binding {
-                            name: name.to_string(),
-                            value: value.clone(),
-                        },
-                    });
-                }
-
-                Err(msg) => Err(msg),
-            }
-        }
-
-        Err(msg) => Err(msg),
-    }
-}
-
-fn eval_stmt_expr(expr: &Expr, frame: &mut Frame, stmt: bool) -> Result<Rc<dyn Any>, String> {
-    match expr {
-        Expr::Pair(p) => eval_call(&p, frame, stmt),
-        Expr::Atom(s) => eval_atom(s, frame),
-        Expr::Nil => Ok(frame.domain.world.nil()),
-    }
-}
-
-fn eval_expr(expr: &Expr, frame: &mut Frame) -> Result<Rc<dyn Any>, String> {
-    eval_stmt_expr(expr, frame, false)
-}
-
-fn eval_atom(s: &str, frame: &mut Frame) -> Result<Rc<dyn Any>, String> {
-    if s == "false" {
-        return Ok(frame.domain.world.boolean(false));
-    }
-    if s == "true" {
-        return Ok(frame.domain.world.boolean(true));
-    }
-
-    if let Some(c) = s.chars().nth(0) {
-        if c == '-' {
-            if let Some(c) = s.chars().nth(1) {
-                if c >= '0' && c <= '9' {
-                    eval_number(s)
+        if let Some(name) = head.0.downcast_ref::<Name>() {
+            if name.0.starts_with("!") {
+                if name.0.len() == 1 {
+                    var = choose_name(&frame);
                 } else {
-                    eval_symbol(s, frame)
+                    var = name.0[1..].to_string();
+                }
+
+                if let Some(tail) = head.1.downcast_ref::<Pair>() {
+                    // Evaluate "!var (exp)" as "!var exp", but
+                    // evaluate "!var (e) x" as it is.
+                    if tail.0.is::<Pair>() && tail.1.is::<()>() {
+                        eval_expr(&mut frame, &tail.0)
+                    } else {
+                        eval_toplevel_expr(&mut frame, &head.1)
+                    }
+                } else {
+                    // End of list.
+                    eval_name(&mut frame, "_")
                 }
             } else {
-                eval_symbol(s, frame)
+                eval_toplevel_expr(&mut frame, &stmt)
             }
-        } else if c == '"' {
-            eval_string(s)
-        } else if c >= '0' && c <= '9' {
-            eval_number(s)
         } else {
-            eval_symbol(s, frame)
+            eval_toplevel_expr(&mut frame, &stmt)
         }
+    }?;
+
+    let mut new = Rc::new(StateLayer {
+        parent: state.inner.parent.clone(), // Skip innermost layer with old _ value.
+        name: var.to_string(),
+        value: value.clone(),
+    });
+
+    if var != "_" {
+        // Bubble old _ value up to innermost new layer.
+        new = Rc::new(StateLayer {
+            parent: Some(new),
+            name: "_".to_string(),
+            value: state.inner.value.clone(),
+        });
+    }
+
+    Ok(State {
+        inner: new,
+        result: Binding {
+            name: var.to_string(),
+            value: value.clone(),
+        },
+    })
+}
+
+fn eval_toplevel_expr(frame: &mut Frame, list_obj: &Obj) -> Result<Obj, String> {
+    if let Some(result) = eval_call(frame, list_obj.downcast_ref::<Pair>().unwrap()) {
+        result
     } else {
-        panic!();
-    }
-}
-
-fn eval_number(s: &str) -> Result<Rc<dyn Any>, String> {
-    let r: Result<i64, ParseIntError> = s.parse();
-    match r {
-        Result::Ok(n) => Ok(Rc::new(n)),
-        Err(e) => Err(e.to_string()),
-    }
-}
-
-fn eval_string(s: &str) -> Result<Rc<dyn Any>, String> {
-    if s.len() < 2 {
-        panic!();
-    }
-
-    let s = &s[1..s.len() - 1];
-    let mut buf = String::with_capacity(s.len());
-    let mut escape = false;
-
-    for c in s.chars() {
-        if escape {
-            match c {
-                't' => buf.push('\t'),
-                'n' => buf.push('\n'),
-                'r' => buf.push('\r'),
-                _ => buf.push(c),
-            }
-
-            escape = false;
-        } else if c == '\\' {
-            escape = true;
+        let list_obj = eval_args(frame, list_obj)?;
+        let list = list_obj.downcast_ref::<Pair>().unwrap();
+        if list.1.is::<()>() {
+            Ok(list.0.clone()) // Convert (x) to x.
         } else {
-            buf.push(c);
+            Ok(list_obj)
         }
     }
-
-    Ok(Rc::new(buf))
 }
 
-fn eval_symbol<'m, 'f>(s: &str, frame: &Frame<'m, 'f>) -> Result<Rc<dyn Any>, String> {
+pub fn eval_expr(frame: &mut Frame, expr: &Obj) -> Result<Obj, String> {
+    if let Some(pair) = expr.downcast_ref::<Pair>() {
+        match eval_call(frame, pair) {
+            Some(result) => result,
+            None => expected_function(),
+        }
+    } else if let Some(name) = expr.downcast_ref::<Name>() {
+        eval_name(frame, &name.0)
+    } else {
+        Ok(expr.clone())
+    }
+}
+
+fn eval_call(frame: &mut Frame, list: &Pair) -> Option<Result<Obj, String>> {
+    match eval_expr(frame, &list.0) {
+        Ok(x) => {
+            let fref = x.downcast_ref::<Ref>()?;
+            Some(if let Some(entry) = frame.domain.entries.get(fref.name) {
+                if let FnImpl::Eval(f) = entry.imp {
+                    f(frame, &list.1)
+                } else {
+                    match eval_args(frame, &list.1) {
+                        Ok(args) => match frame.lookup_ref(fref).unwrap().imp {
+                            FnImpl::Fn(f) => f(&args),
+                            FnImpl::Fun(ref f) => f.invoke(&args),
+                            FnImpl::FunMut(ref mut f) => f.invoke(&args),
+                            _ => panic!(),
+                        },
+
+                        Err(msg) => Err(msg),
+                    }
+                }
+            } else {
+                missing_function()
+            })
+        }
+
+        Err(msg) => Some(Err(msg)),
+    }
+}
+
+fn eval_args(frame: &mut Frame, list: &Obj) -> Result<Obj, String> {
+    Ok(if let Some(pair) = list.downcast_ref::<Pair>() {
+        let car = eval_expr(frame, &pair.0)?;
+        let cdr = eval_args(frame, &pair.1)?;
+        obj::pair(car, cdr)
+    } else {
+        list.clone() // It must be nil.
+    })
+}
+
+fn eval_name(frame: &Frame, s: &str) -> Result<Obj, String> {
     let mut state = &frame.state;
 
     loop {
@@ -363,169 +309,11 @@ fn eval_symbol<'m, 'f>(s: &str, frame: &Frame<'m, 'f>) -> Result<Rc<dyn Any>, St
         }
     }
 
-    if let Some(x) = frame.domain.exts.get(s) {
-        return Ok(x.value.clone());
-    }
-
-    if let Some(x) = frame.domain.forms.get(s) {
-        return Ok(x.value.clone());
+    if let Some(x) = frame.domain.entries.get(s) {
+        return Ok(x.obj.clone());
     }
 
     Err(s.to_string())
-}
-
-fn eval_call(p: &parse::Pair, frame: &mut Frame, stmt: bool) -> Result<Rc<dyn Any>, String> {
-    match eval_expr(&p.0, frame) {
-        Ok(x) => {
-            if let Some(fnref) = x.downcast_ref::<Ref>() {
-                if fnref.form {
-                    return (frame.domain.forms.get(fnref.name).unwrap().f)(&p.1, frame);
-                } else {
-                    let mut args = Vec::new();
-
-                    match eval_args(&mut args, &p.1, frame) {
-                        None => {
-                            if let Some(ext) = frame.domain.exts.get_mut(fnref.name) {
-                                if let Some(fun) = ext.fun {
-                                    fun.invoke(&frame.domain.world, args)
-                                } else if let Some(ref mut fun) = ext.fun_mut {
-                                    fun.invoke(&frame.domain.world, args)
-                                } else {
-                                    panic!();
-                                }
-                            } else {
-                                Err("function implementation is missing".to_string())
-                            }
-                        }
-
-                        Some(msg) => Err(msg),
-                    }
-                }
-            } else if stmt {
-                match p.1 {
-                    Expr::Nil => Ok(x),
-
-                    _ => match eval_list(&p.1, frame) {
-                        Ok(cdr) => Ok(Rc::new(Pair(x, cdr))),
-                        Err(msg) => Err(msg),
-                    },
-                }
-            } else {
-                Err("not a function".to_string())
-            }
-        }
-
-        Err(msg) => Err(msg),
-    }
-}
-
-fn eval_list(args: &Expr, frame: &mut Frame) -> Result<Rc<dyn Any>, String> {
-    match args {
-        Expr::Pair(p) => match eval_expr(&p.0, frame) {
-            Ok(car) => match eval_list(&p.1, frame) {
-                Ok(cdr) => Ok(Rc::new(Pair(car, cdr))),
-                Err(msg) => Err(msg),
-            },
-
-            Err(msg) => Err(msg),
-        },
-
-        Expr::Atom(_) => panic!(),
-
-        Expr::Nil => Ok(frame.domain.world.nil()),
-    }
-}
-
-fn eval_and(args: &Expr, frame: &mut Frame) -> Result<Rc<dyn Any>, String> {
-    match args {
-        Expr::Pair(p) => {
-            match eval_expr(&p.0, frame) {
-                Ok(x) => {
-                    if is_truthful(x.clone()) {
-                        if let Expr::Nil = p.1 {
-                            Ok(x) // Final argument.
-                        } else {
-                            eval_and(&p.1, frame)
-                        }
-                    } else {
-                        Ok(x)
-                    }
-                }
-
-                Err(msg) => Err(msg),
-            }
-        }
-
-        Expr::Atom(_) => panic!(),
-
-        Expr::Nil => Ok(frame.domain.world.boolean(true)),
-    }
-}
-
-fn eval_or(args: &Expr, frame: &mut Frame) -> Result<Rc<dyn Any>, String> {
-    match args {
-        Expr::Pair(p) => {
-            match eval_expr(&p.0, frame) {
-                Ok(x) => {
-                    if is_truthful(x.clone()) {
-                        Ok(x)
-                    } else {
-                        if let Expr::Nil = p.1 {
-                            Ok(x) // Final argument.
-                        } else {
-                            eval_or(&p.1, frame)
-                        }
-                    }
-                }
-
-                Err(msg) => Err(msg),
-            }
-        }
-
-        Expr::Atom(_) => panic!(),
-
-        Expr::Nil => Ok(frame.domain.world.boolean(false)),
-    }
-}
-
-fn eval_args(dest: &mut Vec<Rc<dyn Any>>, args: &Expr, frame: &mut Frame) -> Option<String> {
-    match args {
-        Expr::Pair(p) => match eval_expr(&p.0, frame) {
-            Ok(x) => {
-                dest.push(x);
-                eval_args(dest, &p.1, frame)
-            }
-
-            Err(msg) => Some(msg),
-        },
-
-        Expr::Atom(_) => panic!(),
-
-        Expr::Nil => None,
-    }
-}
-
-/// Convert an object to a boolean value.  The `()`, `false`, `0` (i64) and
-/// `""` (String) values are considered false; all other objects are considered
-/// true.
-pub fn is_truthful(x: Rc<dyn Any>) -> bool {
-    if let Some(_) = x.downcast_ref::<()>() {
-        return false;
-    }
-
-    if let Some(b) = x.downcast_ref::<bool>() {
-        return *b;
-    }
-
-    if let Some(n) = x.downcast_ref::<i64>() {
-        return *n != 0;
-    }
-
-    if let Some(s) = x.downcast_ref::<String>() {
-        return !s.is_empty();
-    }
-
-    true
 }
 
 fn choose_name<'m, 'f>(frame: &Frame<'m, 'f>) -> String {
@@ -533,36 +321,41 @@ fn choose_name<'m, 'f>(frame: &Frame<'m, 'f>) -> String {
         let mut s = String::new();
         s.push('$');
         s.push_str(&i.to_string());
-        if let Ok(_) = eval_symbol(&s, frame) {
-            continue;
+        if !eval_name(frame, &s).is_ok() {
+            return s;
         }
-        return s;
     }
 
     panic!();
+}
+
+pub fn expected_function() -> Result<Obj, String> {
+    Err("not a function".to_string())
+}
+
+pub fn missing_function() -> Result<Obj, String> {
+    Err("function implementation is missing".to_string())
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
 
-    fn eval<'m>(s: &str, domain: &'m mut Domain) -> Rc<dyn Any> {
-        eval_stmt(domain, State::new(&domain), s)
-            .unwrap()
-            .result
-            .value
-            .clone()
+    fn eval<'m>(s: &str, d: &'m mut Domain) -> Obj {
+        eval_stmt(d, State::new(), s).unwrap().result.value.clone()
     }
 
     struct Id;
 
     impl Fun for Id {
-        fn invoke(&self, _: &World, args: Vec<Rc<dyn Any>>) -> Result<Rc<dyn Any>, String> {
-            if args.len() == 1 {
-                Ok(args[0].clone())
-            } else {
-                Err("id: wrong number of arguments".to_string())
+        fn invoke(&self, args: &Obj) -> Result<Obj, String> {
+            if let Some(pair) = args.downcast_ref::<Pair>() {
+                if pair.1.is::<()>() {
+                    return Ok(pair.0.clone());
+                }
             }
+
+            Err("id: wrong number of arguments".to_string())
         }
     }
 
@@ -571,17 +364,17 @@ mod tests {
     }
 
     impl FunMut for Greet {
-        fn invoke(&mut self, w: &World, args: Vec<Rc<dyn Any>>) -> Result<Rc<dyn Any>, String> {
-            if let Some(x) = args.first() {
-                if let Some(b) = x.downcast_ref::<bool>() {
+        fn invoke(&mut self, args: &Obj) -> Result<Obj, String> {
+            if let Some(pair) = args.downcast_ref::<Pair>() {
+                if let Some(b) = pair.0.downcast_ref::<bool>() {
                     if *b {
                         self.greetings += 1;
-                        return Ok(Rc::new("hello, world".to_string()));
+                        return Ok(obj::string("hello, world".to_string()));
                     }
                 }
             }
 
-            Ok(w.nil())
+            Ok(obj::nil())
         }
     }
 
@@ -591,9 +384,9 @@ mod tests {
         let mut greet1 = Greet { greetings: 0 };
         let mut greet2 = Greet { greetings: 0 };
         let mut d = Domain::new();
-        d.register("id", &id);
-        d.register_mut("greet-1", &mut greet1);
-        d.register_mut("greet-2", &mut greet2);
+        d.register_fun("id", &id);
+        d.register_fun_mut("greet-1", &mut greet1);
+        d.register_fun_mut("greet-2", &mut greet2);
 
         assert_eq!(*eval("id 123", &mut d).downcast_ref::<i64>().unwrap(), 123);
 
@@ -614,34 +407,6 @@ mod tests {
         eval("(greet-2 false)", &mut d);
         assert_eq!(greet1.greetings, 1);
         assert_eq!(greet2.greetings, 2);
-    }
-
-    #[test]
-    fn test_eval_string() {
-        let id = Id {};
-        let mut d = Domain::new();
-        d.register("id", &id);
-
-        assert_eq!(
-            *eval(r#"id "foo""#, &mut d)
-                .downcast_ref::<String>()
-                .unwrap(),
-            "foo"
-        );
-
-        assert_eq!(
-            *eval(r#"id "foo\n""#, &mut d)
-                .downcast_ref::<String>()
-                .unwrap(),
-            "foo\n"
-        );
-
-        assert_eq!(
-            *eval(r#"id "\"foo\"""#, &mut d)
-                .downcast_ref::<String>()
-                .unwrap(),
-            r#""foo""#
-        );
     }
 
     #[test]
@@ -667,48 +432,17 @@ mod tests {
     }
 
     #[test]
-    fn test_forms() {
-        let mut d = Domain::new();
-
-        assert_eq!(*eval("(and)", &mut d).downcast_ref::<bool>().unwrap(), true);
-        assert_eq!(
-            *eval("(and (and true true) true)", &mut d)
-                .downcast_ref::<bool>()
-                .unwrap(),
-            true
-        );
-        assert_eq!(
-            *eval("(and (and (and (and)) (and)) (and false))", &mut d)
-                .downcast_ref::<bool>()
-                .unwrap(),
-            false
-        );
-
-        assert_eq!(*eval("(or)", &mut d).downcast_ref::<bool>().unwrap(), false);
-        assert_eq!(
-            *eval("(or (or false false) true)", &mut d)
-                .downcast_ref::<bool>()
-                .unwrap(),
-            true
-        );
-        assert_eq!(
-            *eval("(or (or (or (or)) (or)) (or false))", &mut d)
-                .downcast_ref::<bool>()
-                .unwrap(),
-            false
-        );
-    }
-
-    #[test]
     fn test_state() {
         let id = Id {};
         let mut d = Domain::new();
-        d.register("id", &id);
+        d.register_fun("id", &id);
 
-        let s = State::new(&d);
+        let s = State::new();
 
         let s = eval_stmt(&mut d, s, "!x id true").unwrap();
         let s = eval_stmt(&mut d, s, "id x").unwrap();
+        assert_eq!(s.result.value.downcast_ref::<bool>().unwrap().clone(), true);
+        let s = eval_stmt(&mut d, s, "x").unwrap();
         assert_eq!(s.result.value.downcast_ref::<bool>().unwrap().clone(), true);
         let s = eval_stmt(&mut d, s, "id _").unwrap();
         assert_eq!(s.result.value.downcast_ref::<bool>().unwrap().clone(), true);
@@ -740,7 +474,9 @@ mod tests {
             "abc"
         );
 
-        let s = eval_stmt(&mut d, s, "(!z id false)").unwrap();
+        assert!(eval_stmt(&mut d, s.clone(), "(!z id false)").is_err());
+
+        let s = eval_stmt(&mut d, s, "!z id false").unwrap();
         let s = eval_stmt(&mut d, s, "(id z)").unwrap();
         assert_eq!(
             s.result.value.downcast_ref::<bool>().unwrap().clone(),
