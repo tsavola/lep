@@ -170,7 +170,7 @@ pub fn sub(args: &Obj) -> Result<Obj, String> {
     }
 }
 
-/// Register `*` function.
+/// Register the `*` function.
 pub fn register_mul(d: &mut Domain) {
     d.register("*", mul);
 }
@@ -217,7 +217,7 @@ pub fn div(args: &Obj) -> Result<Obj, String> {
     wrong_number_of_arguments()
 }
 
-/// Register `car` function.
+/// Register the `car` function.
 pub fn register_car(d: &mut Domain) {
     d.register("car", car);
 }
@@ -237,7 +237,7 @@ pub fn car(args: &Obj) -> Result<Obj, String> {
     wrong_number_of_arguments()
 }
 
-/// Register `cdr` function.
+/// Register the `cdr` function.
 pub fn register_cdr(d: &mut Domain) {
     d.register("cdr", cdr);
 }
@@ -257,7 +257,7 @@ pub fn cdr(args: &Obj) -> Result<Obj, String> {
     wrong_number_of_arguments()
 }
 
-/// Register `cons` function.
+/// Register the `cons` function.
 pub fn register_cons(d: &mut Domain) {
     d.register("cons", cons);
 }
@@ -275,7 +275,7 @@ pub fn cons(args: &Obj) -> Result<Obj, String> {
     wrong_number_of_arguments()
 }
 
-/// Register `list` function.
+/// Register the `list` function.
 pub fn register_list(d: &mut Domain) {
     d.register("list", list);
 }
@@ -285,7 +285,7 @@ pub fn list(args: &Obj) -> Result<Obj, String> {
     Ok(args.clone())
 }
 
-/// Register `not` function.
+/// Register the `not` function.
 pub fn register_not(d: &mut Domain) {
     d.register("not", not);
 }
@@ -301,7 +301,7 @@ pub fn not(args: &Obj) -> Result<Obj, String> {
     wrong_number_of_arguments()
 }
 
-/// Register `identity` function.
+/// Register the `identity` function.
 pub fn register_identity(d: &mut Domain) {
     d.register("identity", identity);
 }
