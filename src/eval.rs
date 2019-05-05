@@ -2,7 +2,7 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-use std::collections::HashMap;
+use std::collections::BTreeMap;
 use std::rc::Rc;
 use std::result::Result;
 
@@ -49,13 +49,13 @@ pub struct FnEntry<'f> {
 
 /// Domain of extension functions.
 pub struct Domain<'f> {
-    entries: HashMap<&'static str, FnEntry<'f>>,
+    entries: BTreeMap<&'static str, FnEntry<'f>>,
 }
 
 impl<'f> Domain<'f> {
     pub fn new() -> Self {
         Domain {
-            entries: HashMap::new(),
+            entries: BTreeMap::new(),
         }
     }
 
