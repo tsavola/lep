@@ -55,6 +55,7 @@ fn wrong_number_of_arguments() -> Result<Obj, String> {
 pub fn register(d: &mut Domain) {
     register_and(d);
     register_or(d);
+    register_apply(d);
     register_add(d);
     register_sub(d);
     register_mul(d);
@@ -101,6 +102,39 @@ fn eval_or(frame: &mut Frame, args: &Obj) -> Result<Obj, String> {
     } else {
         Ok(obj::boolean(false))
     }
+}
+
+/// Register the special `apply` form.
+pub fn register_apply(d: &mut Domain) {
+    register_eval(d, "apply", eval_apply);
+}
+
+fn eval_apply(frame: &mut Frame, args: &Obj) -> Result<Obj, String> {
+    if let Some(head) = args.downcast_ref::<Pair>() {
+        if let Some(tail) = head.1.downcast_ref::<Pair>() {
+            if tail.1.is::<()>() {
+                let fexpr = eval_expr(frame, &head.0)?;
+                let fargs = eval_expr(frame, &tail.0)?;
+
+                return if let Some(fref) = fexpr.downcast_ref::<Ref>() {
+                    if let Some(entry) = frame.lookup_ref(fref) {
+                        match entry.imp {
+                            FnImpl::Eval(f) => f(frame, &fargs),
+                            FnImpl::Fn(f) => f(&fargs),
+                            FnImpl::Fun(ref f) => f.invoke(&fargs),
+                            FnImpl::FunMut(ref mut f) => f.invoke(&fargs),
+                        }
+                    } else {
+                        missing_function()
+                    }
+                } else {
+                    expected_function()
+                };
+            }
+        }
+    }
+
+    wrong_number_of_arguments()
 }
 
 /// Register the `+` function.

@@ -97,6 +97,7 @@ Built-in functions:
 ```scheme
 (and arg1 arg2 ...)
 (or arg1 arg2 ...)
+(apply function arguments)
 (+ arg1 arg2 ...)
 (- arg1 arg2 ...)
 (* arg1 arg2 ...)
