@@ -2,8 +2,7 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-use super::obj;
-use super::obj::Obj;
+use super::obj::{self, Obj};
 
 pub(crate) fn parse_stmt(s: &str) -> Result<(Obj, bool), String> {
     let mut s = s.trim_start();

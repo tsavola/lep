@@ -3,8 +3,7 @@
 // license that can be found in the LICENSE file.
 
 use super::eval::{eval_expr, expected_function, missing_function, Domain, FnImpl, Frame, Ref};
-use super::obj;
-use super::obj::{Obj, Pair};
+use super::obj::{self, Obj, Pair};
 
 /// Convert an object to a boolean value.  The `()`, `false`, `0` (i64) and
 /// `""` (String) values are considered false; all other objects are considered

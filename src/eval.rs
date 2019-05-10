@@ -6,8 +6,7 @@ use std::collections::HashMap;
 use std::rc::Rc;
 use std::result::Result;
 
-use super::obj;
-use super::obj::{Name, Obj, Pair};
+use super::obj::{self, Name, Obj, Pair};
 use super::parse::parse_stmt;
 
 /// Ref is a native object stored in an Obj.
