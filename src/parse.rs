@@ -2,13 +2,8 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-use std::rc::Rc;
-
 use super::obj;
 use super::obj::Obj;
-
-#[derive(Eq, PartialEq)]
-pub struct Name(pub String);
 
 pub(crate) fn parse_stmt(s: &str) -> Result<(Obj, bool), String> {
     let mut s = s.trim_start();
@@ -134,7 +129,7 @@ fn atom_object(s: &str) -> Result<Obj, String> {
                 return atom_int(s);
             }
 
-            Ok(Rc::new(Name(s.to_string())))
+            Ok(obj::name(s.to_string()))
         }
     }
 }
@@ -172,7 +167,7 @@ fn parse_tail(s: &str, paren: bool) -> Result<(Obj, usize), String> {
 
 #[cfg(test)]
 mod tests {
-    use super::obj::{Obj, Pair};
+    use super::obj::{Name, Obj, Pair};
     use super::*;
 
     fn parse(s: &str) -> Result<Obj, String> {

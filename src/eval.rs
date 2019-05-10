@@ -7,8 +7,8 @@ use std::rc::Rc;
 use std::result::Result;
 
 use super::obj;
-use super::obj::{Obj, Pair};
-use super::parse::{parse_stmt, Name};
+use super::obj::{Name, Obj, Pair};
+use super::parse::parse_stmt;
 
 /// Ref is a native object stored in an Obj.
 pub struct Ref {

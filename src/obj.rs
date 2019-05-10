@@ -8,6 +8,9 @@ use std::rc::Rc;
 /// Obj can be any object.
 pub type Obj = Rc<dyn Any>;
 
+#[derive(Eq, PartialEq)]
+pub(crate) struct Name(pub String);
+
 /// Pair may be a node in a singly linked list.
 pub struct Pair(pub Obj, pub Obj);
 
@@ -29,6 +32,11 @@ pub fn int(n: i64) -> Obj {
 /// String object.
 pub fn string(s: String) -> Obj {
     Rc::new(s)
+}
+
+/// Name object.
+pub(crate) fn name(s: String) -> Obj {
+    Rc::new(Name(s))
 }
 
 /// Construct a Pair object.
