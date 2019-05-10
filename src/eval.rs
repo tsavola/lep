@@ -112,35 +112,30 @@ pub struct Binding {
 /// Incrementally constructed state.
 #[derive(Clone)]
 pub struct State {
-    inner: Rc<StateLayer>,
+    env: Obj,
     pub result: Binding,
 }
 
 impl State {
     pub fn new() -> Self {
+        let nil = obj::nil();
+
         State {
-            inner: Rc::new(StateLayer {
-                parent: None,
-                name: "_".to_string(),
-                value: obj::nil(),
-            }),
+            env: obj::pair(
+                obj::pair(obj::name("_".to_string()), nil.clone()),
+                nil.clone(),
+            ),
             result: Binding {
                 name: "".to_string(),
-                value: obj::nil(),
+                value: nil,
             },
         }
     }
 }
 
-pub(crate) struct StateLayer {
-    pub parent: Option<Rc<StateLayer>>,
-    pub name: String,
-    pub value: Obj,
-}
-
 pub(crate) struct Frame<'m, 'f> {
     pub domain: &'m mut Domain<'f>,
-    pub state: Rc<StateLayer>,
+    pub env: Obj,
 }
 
 impl<'m, 'f> Frame<'m, 'f> {
@@ -154,7 +149,7 @@ impl<'m, 'f> Frame<'m, 'f> {
 pub fn eval_stmt<'m>(domain: &'m mut Domain, state: State, s: &str) -> Result<State, String> {
     if s.trim_start().len() == 0 {
         return Ok(State {
-            inner: state.inner,
+            env: state.env,
             result: Binding {
                 name: "".to_string(),
                 value: obj::nil(),
@@ -168,7 +163,7 @@ pub fn eval_stmt<'m>(domain: &'m mut Domain, state: State, s: &str) -> Result<St
 
     let mut frame = Frame {
         domain: domain,
-        state: state.inner.clone(),
+        env: state.env.clone(),
     };
 
     let value = if paren {
@@ -204,26 +199,21 @@ pub fn eval_stmt<'m>(domain: &'m mut Domain, state: State, s: &str) -> Result<St
         }
     }?;
 
-    let mut new = Rc::new(StateLayer {
-        parent: state.inner.parent.clone(), // Skip innermost layer with old _ value.
-        name: var.to_string(),
-        value: value.clone(),
-    });
+    let mut new = obj::pair(
+        obj::pair(obj::name(var.to_string()), value.clone()),
+        cdr(&state.env).clone(), // Skip innermost layer with old _ value.
+    );
 
     if var != "_" {
         // Bubble old _ value up to innermost new layer.
-        new = Rc::new(StateLayer {
-            parent: Some(new),
-            name: "_".to_string(),
-            value: state.inner.value.clone(),
-        });
+        new = obj::pair(car(&state.env).clone(), new);
     }
 
     Ok(State {
-        inner: new,
+        env: new,
         result: Binding {
             name: var.to_string(),
-            value: value.clone(),
+            value: value,
         },
     })
 }
@@ -294,16 +284,16 @@ fn eval_args(frame: &mut Frame, list: &Obj) -> Result<Obj, String> {
 }
 
 fn eval_name(frame: &Frame, s: &str) -> Result<Obj, String> {
-    let mut state = &frame.state;
+    let mut level = &frame.env.clone();
 
     loop {
-        if state.name == s {
-            return Ok(state.value.clone());
+        let binding = car(level).clone();
+        if car(&binding).downcast_ref::<Name>().unwrap().0 == s {
+            return Ok(cdr(&binding).clone());
         }
 
-        if let Some(ref parent) = state.parent {
-            state = parent;
-        } else {
+        level = cdr(&level);
+        if level.is::<()>() {
             break;
         }
     }
@@ -334,6 +324,14 @@ pub(crate) fn expected_function() -> Result<Obj, String> {
 
 pub(crate) fn missing_function() -> Result<Obj, String> {
     Err("function implementation is missing".to_string())
+}
+
+fn car(pair: &Obj) -> &Obj {
+    &pair.downcast_ref::<Pair>().unwrap().0
+}
+
+fn cdr(pair: &Obj) -> &Obj {
+    &pair.downcast_ref::<Pair>().unwrap().1
 }
 
 #[cfg(test)]
