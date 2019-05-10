@@ -2,9 +2,7 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-use super::eval::{
-    eval_expr, expected_function, missing_function, register_eval, Domain, FnImpl, Frame, Ref,
-};
+use super::eval::{eval_expr, expected_function, missing_function, Domain, FnImpl, Frame, Ref};
 use super::obj;
 use super::obj::{Obj, Pair};
 
@@ -70,7 +68,7 @@ pub fn register(d: &mut Domain) {
 
 /// Register the special `and` form.
 pub fn register_and(d: &mut Domain) {
-    register_eval(d, "and", eval_and);
+    d.register_eval("and", eval_and);
 }
 
 fn eval_and(frame: &mut Frame, args: &Obj) -> Result<Obj, String> {
@@ -88,7 +86,7 @@ fn eval_and(frame: &mut Frame, args: &Obj) -> Result<Obj, String> {
 
 /// Register the special `or` form.
 pub fn register_or(d: &mut Domain) {
-    register_eval(d, "or", eval_or);
+    d.register_eval("or", eval_or);
 }
 
 fn eval_or(frame: &mut Frame, args: &Obj) -> Result<Obj, String> {
@@ -106,7 +104,7 @@ fn eval_or(frame: &mut Frame, args: &Obj) -> Result<Obj, String> {
 
 /// Register the special `apply` form.
 pub fn register_apply(d: &mut Domain) {
-    register_eval(d, "apply", eval_apply);
+    d.register_eval("apply", eval_apply);
 }
 
 fn eval_apply(frame: &mut Frame, args: &Obj) -> Result<Obj, String> {

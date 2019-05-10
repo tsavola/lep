@@ -10,7 +10,7 @@ use super::obj::Obj;
 #[derive(Eq, PartialEq)]
 pub struct Name(pub String);
 
-pub fn parse_stmt(s: &str) -> Result<(Obj, bool), String> {
+pub(crate) fn parse_stmt(s: &str) -> Result<(Obj, bool), String> {
     let mut s = s.trim_start();
     let mut paren = false;
 
@@ -30,7 +30,7 @@ pub fn parse_stmt(s: &str) -> Result<(Obj, bool), String> {
     }
 }
 
-pub fn parse_expr(s: &str) -> Result<(Obj, usize), String> {
+pub(crate) fn parse_expr(s: &str) -> Result<(Obj, usize), String> {
     let s = s.trim_start();
 
     match s.chars().nth(0).unwrap() {

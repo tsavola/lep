@@ -35,14 +35,14 @@ pub trait FunMut {
     fn invoke(&mut self, list: &Obj) -> Result<Obj, String>;
 }
 
-pub enum FnImpl<'f> {
+pub(crate) enum FnImpl<'f> {
     Eval(fn(&mut Frame, &Obj) -> Result<Obj, String>),
     Fn(fn(&Obj) -> Result<Obj, String>),
     Fun(&'f Fun),
     FunMut(&'f mut FunMut),
 }
 
-pub struct FnEntry<'f> {
+pub(crate) struct FnEntry<'f> {
     pub imp: FnImpl<'f>,
     obj: Obj,
 }
@@ -57,6 +57,20 @@ impl<'f> Domain<'f> {
         Domain {
             entries: HashMap::new(),
         }
+    }
+
+    pub(crate) fn register_eval(
+        &mut self,
+        name: &'static str,
+        f: fn(&mut Frame, &Obj) -> Result<Obj, String>,
+    ) {
+        self.entries.insert(
+            name,
+            FnEntry {
+                imp: FnImpl::Eval(f),
+                obj: Rc::new(Ref { name: name }),
+            },
+        );
     }
 
     pub fn register(&mut self, name: &'static str, f: fn(&Obj) -> Result<Obj, String>) {
@@ -90,20 +104,6 @@ impl<'f> Domain<'f> {
     }
 }
 
-pub fn register_eval(
-    domain: &mut Domain,
-    name: &'static str,
-    f: fn(&mut Frame, &Obj) -> Result<Obj, String>,
-) {
-    domain.entries.insert(
-        name,
-        FnEntry {
-            imp: FnImpl::Eval(f),
-            obj: Rc::new(Ref { name: name }),
-        },
-    );
-}
-
 #[derive(Clone)]
 pub struct Binding {
     pub name: String,
@@ -133,13 +133,13 @@ impl State {
     }
 }
 
-pub struct StateLayer {
+pub(crate) struct StateLayer {
     pub parent: Option<Rc<StateLayer>>,
     pub name: String,
     pub value: Obj,
 }
 
-pub struct Frame<'m, 'f> {
+pub(crate) struct Frame<'m, 'f> {
     pub domain: &'m mut Domain<'f>,
     pub state: Rc<StateLayer>,
 }
@@ -243,7 +243,7 @@ fn eval_toplevel_expr(frame: &mut Frame, list_obj: &Obj) -> Result<Obj, String> 
     }
 }
 
-pub fn eval_expr(frame: &mut Frame, expr: &Obj) -> Result<Obj, String> {
+pub(crate) fn eval_expr(frame: &mut Frame, expr: &Obj) -> Result<Obj, String> {
     if let Some(pair) = expr.downcast_ref::<Pair>() {
         match eval_call(frame, pair) {
             Some(result) => result,
@@ -329,11 +329,11 @@ fn choose_name<'m, 'f>(frame: &Frame<'m, 'f>) -> String {
     panic!();
 }
 
-pub fn expected_function() -> Result<Obj, String> {
+pub(crate) fn expected_function() -> Result<Obj, String> {
     Err("not a function".to_string())
 }
 
-pub fn missing_function() -> Result<Obj, String> {
+pub(crate) fn missing_function() -> Result<Obj, String> {
     Err("function implementation is missing".to_string())
 }
 
