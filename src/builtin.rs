@@ -63,6 +63,7 @@ pub fn register(d: &mut Domain) {
     register_list(d);
     register_not(d);
     register_identity(d);
+    register_env(d);
 }
 
 /// Register the special `and` form.
@@ -314,6 +315,19 @@ pub fn identity(args: &Obj) -> Result<Obj, String> {
     }
 
     wrong_number_of_arguments()
+}
+
+/// Register the `env` function.
+pub fn register_env(d: &mut Domain) {
+    d.register_eval("env", env);
+}
+
+fn env(frame: &mut Frame, args: &Obj) -> Result<Obj, String> {
+    if args.is::<()>() {
+        Ok(frame.env.downcast_ref::<Pair>().unwrap().1.clone()) // Skip _.
+    } else {
+        wrong_number_of_arguments()
+    }
 }
 
 #[cfg(test)]

@@ -63,6 +63,8 @@ Examples:
     z = false
     >> !
     $2 = false
+    >> env
+    (($2 . false) (z . false) (y . 12) (x . 6) ($1 . 6))
 
 The statement syntax is optimized for two-step usage:
 
@@ -108,6 +110,7 @@ Built-in functions:
 (list arg1 arg2 ...)
 (not arg)
 (identity arg)
+(env)
 ```
 
 Custom extension functions have signature

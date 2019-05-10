@@ -9,7 +9,7 @@ use std::rc::Rc;
 pub type Obj = Rc<dyn Any>;
 
 #[derive(Eq, PartialEq)]
-pub(crate) struct Name(pub String);
+pub struct Name(pub String);
 
 /// Pair may be a node in a singly linked list.
 pub struct Pair(pub Obj, pub Obj);

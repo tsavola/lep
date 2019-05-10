@@ -3,7 +3,7 @@
 // license that can be found in the LICENSE file.
 
 use super::eval::Ref;
-use super::obj::{Obj, Pair};
+use super::obj::{Name, Obj, Pair};
 
 /// Stringify (), bool, i64, String, Ref or Pair.  String will be quoted.  None
 /// is returned if the type is not supported.
@@ -39,6 +39,10 @@ fn stringify_inner(x: &Obj) -> Option<String> {
         quoted.push_str(&escaped);
         quoted.push('"');
         return Some(quoted);
+    }
+
+    if let Some(n) = x.downcast_ref::<Name>() {
+        return Some(n.0.clone());
     }
 
     if let Some(r) = x.downcast_ref::<Ref>() {

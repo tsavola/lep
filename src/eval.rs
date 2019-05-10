@@ -112,7 +112,7 @@ pub struct Binding {
 /// Incrementally constructed state.
 #[derive(Clone)]
 pub struct State {
-    env: Obj,
+    pub(crate) env: Obj,
     pub result: Binding,
 }
 
