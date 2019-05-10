@@ -27,7 +27,7 @@ Statement syntax (both parts are optional):
 
 The variable name is any character string excluding whitespace, `(` and `)`.
 The expression is an otherwise usual
-[S-expression](https://en.wikipedia.org/wiki/S-expression), but the outermost
+[s-expression](https://en.wikipedia.org/wiki/S-expression), but the outermost
 parentheses may be omitted.
 
 The statement yields the value of the expression.  If the `!` prefix is
@@ -132,6 +132,7 @@ Fully supported types:
 - `bool`
 - `i64`
 - `String`
+- `lep::Name` (symbol)
 - `lep::Ref` (function)
 - `lep::Pair` (cons cell, e.g. a list node)
 

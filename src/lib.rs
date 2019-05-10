@@ -11,5 +11,5 @@ mod parse;
 mod stringify;
 
 pub use eval::{eval_stmt, Domain, Fun, FunMut, Ref, State};
-pub use obj::{Obj, Pair};
+pub use obj::{Name, Obj, Pair};
 pub use stringify::stringify;
