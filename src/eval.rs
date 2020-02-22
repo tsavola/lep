@@ -9,6 +9,8 @@ use std::result::Result;
 use super::obj::{self, Name, Obj, Pair};
 use super::parse::parse_stmt;
 
+pub type Res = Result<Obj, String>;
+
 /// Ref is a native object stored in an Obj.
 pub struct Ref {
     name: &'static str,
@@ -26,19 +28,19 @@ impl ToString for Ref {
 
 /// Fun is an extension function object.
 pub trait Fun {
-    fn invoke(&self, list: &Obj) -> Result<Obj, String>;
+    fn invoke(&self, list: &Obj) -> Res;
 }
 
 /// FunMut is an extension function object with side-effects.
 pub trait FunMut {
-    fn invoke(&mut self, list: &Obj) -> Result<Obj, String>;
+    fn invoke(&mut self, list: &Obj) -> Res;
 }
 
 pub(crate) enum FnImpl<'f> {
-    Eval(fn(&mut Frame, &Obj) -> Result<Obj, String>),
-    Fn(fn(&Obj) -> Result<Obj, String>),
-    Fun(&'f Fun),
-    FunMut(&'f mut FunMut),
+    Eval(fn(&mut Frame, &Obj) -> Res),
+    Fn(fn(&Obj) -> Res),
+    Fun(&'f dyn Fun),
+    FunMut(&'f mut dyn FunMut),
 }
 
 pub(crate) struct FnEntry<'f> {
@@ -58,11 +60,7 @@ impl<'f> Domain<'f> {
         }
     }
 
-    pub(crate) fn register_eval(
-        &mut self,
-        name: &'static str,
-        f: fn(&mut Frame, &Obj) -> Result<Obj, String>,
-    ) {
+    pub(crate) fn register_eval(&mut self, name: &'static str, f: fn(&mut Frame, &Obj) -> Res) {
         self.entries.insert(
             name,
             FnEntry {
@@ -72,7 +70,7 @@ impl<'f> Domain<'f> {
         );
     }
 
-    pub fn register(&mut self, name: &'static str, f: fn(&Obj) -> Result<Obj, String>) {
+    pub fn register(&mut self, name: &'static str, f: fn(&Obj) -> Res) {
         self.entries.insert(
             name,
             FnEntry {
@@ -82,7 +80,7 @@ impl<'f> Domain<'f> {
         );
     }
 
-    pub fn register_fun(&mut self, name: &'static str, f: &'f Fun) {
+    pub fn register_fun(&mut self, name: &'static str, f: &'f dyn Fun) {
         self.entries.insert(
             name,
             FnEntry {
@@ -92,7 +90,7 @@ impl<'f> Domain<'f> {
         );
     }
 
-    pub fn register_fun_mut(&mut self, name: &'static str, f: &'f mut FunMut) {
+    pub fn register_fun_mut(&mut self, name: &'static str, f: &'f mut dyn FunMut) {
         self.entries.insert(
             name,
             FnEntry {
@@ -128,6 +126,20 @@ impl State {
             result: Binding {
                 name: "".to_string(),
                 value: nil,
+            },
+        }
+    }
+
+    /// Derive a state with the given result value (bound to `_`).
+    pub fn with_result(&self, value: Obj) -> State {
+        State {
+            env: obj::pair(
+                obj::pair(obj::name("_".to_string()), value.clone()),
+                cdr(&self.env).clone(), // Skip innermost layer with old _ value.
+            ),
+            result: Binding {
+                name: "_".to_string(),
+                value: value,
             },
         }
     }
@@ -218,7 +230,7 @@ pub fn eval_stmt<'m>(domain: &'m mut Domain, state: State, s: &str) -> Result<St
     })
 }
 
-fn eval_toplevel_expr(frame: &mut Frame, list_obj: &Obj) -> Result<Obj, String> {
+fn eval_toplevel_expr(frame: &mut Frame, list_obj: &Obj) -> Res {
     if let Some(result) = eval_call(frame, list_obj.downcast_ref::<Pair>().unwrap()) {
         result
     } else {
@@ -232,7 +244,7 @@ fn eval_toplevel_expr(frame: &mut Frame, list_obj: &Obj) -> Result<Obj, String> 
     }
 }
 
-pub(crate) fn eval_expr(frame: &mut Frame, expr: &Obj) -> Result<Obj, String> {
+pub(crate) fn eval_expr(frame: &mut Frame, expr: &Obj) -> Res {
     if let Some(pair) = expr.downcast_ref::<Pair>() {
         match eval_call(frame, pair) {
             Some(result) => result,
@@ -245,7 +257,7 @@ pub(crate) fn eval_expr(frame: &mut Frame, expr: &Obj) -> Result<Obj, String> {
     }
 }
 
-fn eval_call(frame: &mut Frame, list: &Pair) -> Option<Result<Obj, String>> {
+fn eval_call(frame: &mut Frame, list: &Pair) -> Option<Res> {
     match eval_expr(frame, &list.0) {
         Ok(x) => {
             let fref = x.downcast_ref::<Ref>()?;
@@ -273,7 +285,7 @@ fn eval_call(frame: &mut Frame, list: &Pair) -> Option<Result<Obj, String>> {
     }
 }
 
-fn eval_args(frame: &mut Frame, list: &Obj) -> Result<Obj, String> {
+fn eval_args(frame: &mut Frame, list: &Obj) -> Res {
     Ok(if let Some(pair) = list.downcast_ref::<Pair>() {
         let car = eval_expr(frame, &pair.0)?;
         let cdr = eval_args(frame, &pair.1)?;
@@ -283,7 +295,7 @@ fn eval_args(frame: &mut Frame, list: &Obj) -> Result<Obj, String> {
     })
 }
 
-fn eval_name(frame: &Frame, s: &str) -> Result<Obj, String> {
+fn eval_name(frame: &Frame, s: &str) -> Res {
     let mut level = &frame.env.clone();
 
     loop {
@@ -318,11 +330,11 @@ fn choose_name<'m, 'f>(frame: &Frame<'m, 'f>) -> String {
     panic!();
 }
 
-pub(crate) fn expected_function() -> Result<Obj, String> {
+pub(crate) fn expected_function() -> Res {
     Err("not a function".to_string())
 }
 
-pub(crate) fn missing_function() -> Result<Obj, String> {
+pub(crate) fn missing_function() -> Res {
     Err("function implementation is missing".to_string())
 }
 
@@ -345,7 +357,7 @@ mod tests {
     struct Id;
 
     impl Fun for Id {
-        fn invoke(&self, args: &Obj) -> Result<Obj, String> {
+        fn invoke(&self, args: &Obj) -> Res {
             if let Some(pair) = args.downcast_ref::<Pair>() {
                 if pair.1.is::<()>() {
                     return Ok(pair.0.clone());
@@ -361,7 +373,7 @@ mod tests {
     }
 
     impl FunMut for Greet {
-        fn invoke(&mut self, args: &Obj) -> Result<Obj, String> {
+        fn invoke(&mut self, args: &Obj) -> Res {
             if let Some(pair) = args.downcast_ref::<Pair>() {
                 if let Some(b) = pair.0.downcast_ref::<bool>() {
                     if *b {

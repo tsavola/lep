@@ -23,13 +23,10 @@ fn main() {
 
     match eval_stmt(&mut domain, state, &line) {
         Ok(state) => {
-            if let Some(repr) = stringify(&state.result.value) {
-                if repr.len() > 0 {
-                    println!("{}", repr);
-                }
-            } else {
-                exit(1);
-            }
+            println!(
+                "{}",
+                stringify(&state.result.value).unwrap_or("?".to_string())
+            );
         }
 
         Err(msg) => {

@@ -2,7 +2,9 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-use super::eval::{eval_expr, expected_function, missing_function, Domain, FnImpl, Frame, Ref};
+use super::eval::{
+    eval_expr, expected_function, missing_function, Domain, FnImpl, Frame, Ref, Res,
+};
 use super::obj::{self, Obj, Pair};
 
 /// Convert an object to a boolean value.  The `()`, `false`, `0` (i64) and
@@ -36,15 +38,15 @@ fn sum(value: i64, list: &Obj) -> Option<i64> {
     }
 }
 
-fn expected_i64() -> Result<Obj, String> {
+fn expected_i64() -> Res {
     Err("arithmetic function expects i64".to_string())
 }
 
-fn expected_pair() -> Result<Obj, String> {
+fn expected_pair() -> Res {
     Err("function expects cons pair as argument".to_string())
 }
 
-fn wrong_number_of_arguments() -> Result<Obj, String> {
+fn wrong_number_of_arguments() -> Res {
     Err("wrong number of arguments".to_string())
 }
 
@@ -71,7 +73,7 @@ pub fn register_and(d: &mut Domain) {
     d.register_eval("and", eval_and);
 }
 
-fn eval_and(frame: &mut Frame, args: &Obj) -> Result<Obj, String> {
+fn eval_and(frame: &mut Frame, args: &Obj) -> Res {
     if let Some(pair) = args.downcast_ref::<Pair>() {
         let x = eval_expr(frame, &pair.0)?;
         if is_truthful(&x) && pair.1.is::<Pair>() {
@@ -89,7 +91,7 @@ pub fn register_or(d: &mut Domain) {
     d.register_eval("or", eval_or);
 }
 
-fn eval_or(frame: &mut Frame, args: &Obj) -> Result<Obj, String> {
+fn eval_or(frame: &mut Frame, args: &Obj) -> Res {
     if let Some(pair) = args.downcast_ref::<Pair>() {
         let x = eval_expr(frame, &pair.0)?;
         if is_truthful(&x) || pair.1.is::<()>() {
@@ -107,7 +109,7 @@ pub fn register_apply(d: &mut Domain) {
     d.register_eval("apply", eval_apply);
 }
 
-fn eval_apply(frame: &mut Frame, args: &Obj) -> Result<Obj, String> {
+fn eval_apply(frame: &mut Frame, args: &Obj) -> Res {
     if let Some(head) = args.downcast_ref::<Pair>() {
         if let Some(tail) = head.1.downcast_ref::<Pair>() {
             if tail.1.is::<()>() {
@@ -141,7 +143,7 @@ pub fn register_add(d: &mut Domain) {
 }
 
 /// The `+` function.
-pub fn add(args: &Obj) -> Result<Obj, String> {
+pub fn add(args: &Obj) -> Res {
     match sum(0, args) {
         Some(n) => Ok(obj::int(n)),
         None => expected_i64(),
@@ -154,7 +156,7 @@ pub fn register_sub(d: &mut Domain) {
 }
 
 /// The `-` function.
-pub fn sub(args: &Obj) -> Result<Obj, String> {
+pub fn sub(args: &Obj) -> Res {
     if let Some(pair) = args.downcast_ref::<Pair>() {
         if let Some(first) = pair.0.downcast_ref::<i64>() {
             if pair.1.is::<()>() {
@@ -176,7 +178,7 @@ pub fn register_mul(d: &mut Domain) {
 }
 
 /// The `*` function.
-pub fn mul(args: &Obj) -> Result<Obj, String> {
+pub fn mul(args: &Obj) -> Res {
     match product(1, args) {
         Some(n) => Ok(obj::int(n)),
         None => expected_i64(),
@@ -201,7 +203,7 @@ pub fn register_div(d: &mut Domain) {
 }
 
 /// The `/` function.
-pub fn div(args: &Obj) -> Result<Obj, String> {
+pub fn div(args: &Obj) -> Res {
     if let Some(pair) = args.downcast_ref::<Pair>() {
         if pair.1.is::<Pair>() {
             if let Some(dividend) = pair.0.downcast_ref::<i64>() {
@@ -223,7 +225,7 @@ pub fn register_car(d: &mut Domain) {
 }
 
 /// The `car` function.
-pub fn car(args: &Obj) -> Result<Obj, String> {
+pub fn car(args: &Obj) -> Res {
     if let Some(list) = args.downcast_ref::<Pair>() {
         if list.1.is::<()>() {
             return if let Some(arg) = list.0.downcast_ref::<Pair>() {
@@ -243,7 +245,7 @@ pub fn register_cdr(d: &mut Domain) {
 }
 
 /// The `cdr` function.
-pub fn cdr(args: &Obj) -> Result<Obj, String> {
+pub fn cdr(args: &Obj) -> Res {
     if let Some(list) = args.downcast_ref::<Pair>() {
         if list.1.is::<()>() {
             return if let Some(arg) = list.0.downcast_ref::<Pair>() {
@@ -263,7 +265,7 @@ pub fn register_cons(d: &mut Domain) {
 }
 
 /// The `cons` function.
-pub fn cons(args: &Obj) -> Result<Obj, String> {
+pub fn cons(args: &Obj) -> Res {
     if let Some(head) = args.downcast_ref::<Pair>() {
         if let Some(tail) = head.1.downcast_ref::<Pair>() {
             if tail.1.is::<()>() {
@@ -281,7 +283,7 @@ pub fn register_list(d: &mut Domain) {
 }
 
 /// The `list` function.
-pub fn list(args: &Obj) -> Result<Obj, String> {
+pub fn list(args: &Obj) -> Res {
     Ok(args.clone())
 }
 
@@ -291,7 +293,7 @@ pub fn register_not(d: &mut Domain) {
 }
 
 /// The `not` function.
-pub fn not(args: &Obj) -> Result<Obj, String> {
+pub fn not(args: &Obj) -> Res {
     if let Some(pair) = args.downcast_ref::<Pair>() {
         if pair.1.is::<()>() {
             return Ok(obj::boolean(!is_truthful(&pair.0)));
@@ -307,7 +309,7 @@ pub fn register_identity(d: &mut Domain) {
 }
 
 /// The `identity` function.
-pub fn identity(args: &Obj) -> Result<Obj, String> {
+pub fn identity(args: &Obj) -> Res {
     if let Some(pair) = args.downcast_ref::<Pair>() {
         if pair.1.is::<()>() {
             return Ok(pair.0.clone());
@@ -322,7 +324,7 @@ pub fn register_env(d: &mut Domain) {
     d.register_eval("env", env);
 }
 
-fn env(frame: &mut Frame, args: &Obj) -> Result<Obj, String> {
+fn env(frame: &mut Frame, args: &Obj) -> Res {
     if args.is::<()>() {
         Ok(frame.env.downcast_ref::<Pair>().unwrap().1.clone()) // Skip _.
     } else {

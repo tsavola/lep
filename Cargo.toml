@@ -1,6 +1,6 @@
 [package]
 name = "lep"
-version = "0.4.3"
+version = "0.4.4"
 authors = ["Timo Savola <timo.savola@iki.fi>"]
 edition = "2018"
 description = "Mini language for interactive consoles, featuring small code footprint."
@@ -12,7 +12,7 @@ categories = ["command-line-interface", "parser-implementations"]
 license = "BSD-3-Clause"
 
 [dev-dependencies]
-rustyline = "3.0.0"
+rustyline = "6.0.0"
 
 [[example]]
 name = "cli"

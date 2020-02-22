@@ -272,8 +272,8 @@ mod tests {
         assert_eq!(tail.0.downcast_ref::<Name>().unwrap().0, "bar");
         tail.1.downcast_ref::<()>().unwrap();
 
-        parse_stmt(r#"foo()"#).is_err();
-        parse_stmt(r#"(foo)()"#).is_err();
-        parse_stmt(r#"(foo)bar"#).is_err();
+        parse_stmt(r#"foo()"#).unwrap_err();
+        parse_stmt(r#"(foo)()"#).unwrap_err();
+        parse_stmt(r#"(foo)bar"#).unwrap_err();
     }
 }

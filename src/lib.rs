@@ -5,11 +5,11 @@
 //! An interpreter for implementing interactive consoles.
 
 pub mod builtin;
+pub mod display;
 mod eval;
 pub mod obj;
 mod parse;
-mod stringify;
 
-pub use eval::{eval_stmt, Domain, Fun, FunMut, Ref, State};
+pub use display::stringify;
+pub use eval::{eval_stmt, Domain, Fun, FunMut, Ref, Res, State};
 pub use obj::{Name, Obj, Pair};
-pub use stringify::stringify;

@@ -8,14 +8,14 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use rustyline::error::ReadlineError;
 use rustyline::Editor;
 
-use lep::{builtin, eval_stmt, obj, stringify, Domain, Fun, FunMut, Obj, State};
+use lep::{builtin, eval_stmt, obj, stringify, Domain, Fun, FunMut, Obj, Res, State};
 
 struct Sequence {
     n: i64,
 }
 
 impl FunMut for Sequence {
-    fn invoke(&mut self, args: &Obj) -> Result<Obj, String> {
+    fn invoke(&mut self, args: &Obj) -> Res {
         if args.is::<()>() {
             self.n += 1;
             Ok(obj::int(self.n))
@@ -28,7 +28,7 @@ impl FunMut for Sequence {
 struct Time;
 
 impl Fun for Time {
-    fn invoke(&self, args: &Obj) -> Result<Obj, String> {
+    fn invoke(&self, args: &Obj) -> Res {
         if args.is::<()>() {
             match SystemTime::now().duration_since(UNIX_EPOCH) {
                 Ok(n) => Ok(obj::int(n.as_secs() as i64)),
@@ -57,7 +57,7 @@ fn main() {
     loop {
         match rl.readline(&format!("{}>> ", prefix)) {
             Ok(line) => {
-                rl.add_history_entry(line.as_ref());
+                rl.add_history_entry(&line);
 
                 match eval_stmt(&mut domain, state.clone(), &line) {
                     Ok(res) => {
@@ -67,17 +67,12 @@ fn main() {
                             } else if !res.result.name.is_empty() {
                                 println!("{} = ()", res.result.name);
                             }
-                        } else if let Some(repr) = stringify(&res.result.value) {
+                        } else {
+                            let repr = stringify(&res.result.value).unwrap_or("?".to_string());
                             if res.result.name == "_" {
                                 prefix = repr + " ";
                             } else if !res.result.name.is_empty() {
                                 println!("{} = {}", res.result.name, repr);
-                            }
-                        } else {
-                            if res.result.name == "_" {
-                                prefix = "? ".to_string();
-                            } else if !res.result.name.is_empty() {
-                                println!("{} = ?", res.result.name);
                             }
                         }
 
