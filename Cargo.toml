@@ -9,7 +9,7 @@ repository = "https://github.com/tsavola/lep"
 readme = "README.md"
 keywords = ["extension", "interpreter", "language", "lisp", "repl"]
 categories = ["command-line-interface", "parser-implementations"]
-license = "BSD-3-Clause"
+license = "MIT"
 
 [dev-dependencies]
 rustyline = "6.0.0"
