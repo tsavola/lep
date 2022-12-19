@@ -8,14 +8,14 @@ pub(crate) fn parse_stmt(s: &str) -> Result<(Obj, bool), String> {
     let mut s = s.trim_start();
     let mut paren = false;
 
-    if s.starts_with("(") {
+    if s.starts_with('(') {
         s = &s[1..];
         paren = true;
     }
 
     let (car, n) = parse_tail(s, paren)?;
     let t = s[s.len() - n..].trim_start();
-    if t.len() == 0 {
+    if t.is_empty() {
         Ok((car, paren))
     } else {
         // Trailing terms after parenthesized first term; add top-level pair.
@@ -27,14 +27,14 @@ pub(crate) fn parse_stmt(s: &str) -> Result<(Obj, bool), String> {
 pub(crate) fn parse_expr(s: &str) -> Result<(Obj, usize), String> {
     let s = s.trim_start();
 
-    match s.chars().nth(0).unwrap() {
+    match s.chars().next().unwrap() {
         '(' => parse_tail(&s[1..], true),
         _ => parse_atom(s),
     }
 }
 
 fn parse_atom(s: &str) -> Result<(Obj, usize), String> {
-    if s.chars().nth(0).unwrap() == '"' {
+    if s.starts_with('"') {
         parse_string(s)
     } else {
         parse_nonstring(s)
@@ -117,14 +117,14 @@ fn atom_object(s: &str) -> Result<Obj, String> {
         "true" => Ok(obj::boolean(true)),
 
         _ => {
-            let c = s.chars().nth(0).unwrap();
+            let c = s.chars().next().unwrap();
             if c == '-' {
                 if let Some(c) = s.chars().nth(1) {
-                    if c >= '0' && c <= '9' {
+                    if ('0'..='9').contains(&c) {
                         return atom_int(s);
                     }
                 }
-            } else if c >= '0' && c <= '9' {
+            } else if ('0'..='9').contains(&c) {
                 return atom_int(s);
             }
 
@@ -143,7 +143,7 @@ fn atom_int(s: &str) -> Result<Obj, String> {
 fn parse_tail(s: &str, paren: bool) -> Result<(Obj, usize), String> {
     let s = s.trim_start();
 
-    if let Some(c) = s.chars().nth(0) {
+    if let Some(c) = s.chars().next() {
         if c == ')' {
             if let Some(c) = s.chars().nth(1) {
                 if !(c == ')' || c.is_whitespace()) {

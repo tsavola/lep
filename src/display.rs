@@ -18,7 +18,7 @@ pub fn stringify_ex<F: Fn(&Obj) -> Option<String> + Clone>(x: &Obj, f: F) -> Opt
     if x.is::<Pair>() {
         let mut s = String::new();
         s.push('(');
-        s.push_str(&stringify_inner(x, f).unwrap_or("?".to_string()));
+        s.push_str(&stringify_inner(x, f).unwrap_or_else(|| "?".to_string()));
         s.push(')');
         Some(s)
     } else {
@@ -61,14 +61,14 @@ fn stringify_inner<F: Fn(&Obj) -> Option<String> + Clone>(x: &Obj, f: F) -> Opti
     }
 
     if let Some(p) = x.downcast_ref::<Pair>() {
-        let mut s = stringify_ex(&p.0, f.clone()).unwrap_or("?".to_string());
+        let mut s = stringify_ex(&p.0, f.clone()).unwrap_or_else(|| "?".to_string());
         if !p.1.is::<()>() {
             if p.1.is::<Pair>() {
                 s.push(' ');
             } else {
                 s.push_str(" . ");
             }
-            s.push_str(&stringify_inner(&p.1, f).unwrap_or("?".to_string()));
+            s.push_str(&stringify_inner(&p.1, f).unwrap_or_else(|| "?".to_string()));
         }
         return Some(s);
     }

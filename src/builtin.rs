@@ -121,7 +121,7 @@ fn eval_apply(frame: &mut Frame, args: &Obj) -> Res {
                         match entry.imp {
                             FnImpl::Eval(f) => f(frame, &fargs),
                             FnImpl::Fn(f) => f(&fargs),
-                            FnImpl::Fun(ref f) => f.invoke(&fargs),
+                            FnImpl::Fun(f) => f.invoke(&fargs),
                             FnImpl::FunMut(ref mut f) => f.invoke(&fargs),
                         }
                     } else {

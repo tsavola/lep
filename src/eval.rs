@@ -22,7 +22,7 @@ impl ToString for Ref {
         s.push_str("<function ");
         s.push_str(self.name);
         s.push('>');
-        return s;
+        s
     }
 }
 
@@ -71,7 +71,7 @@ impl<'f> Domain<'f> {
             name,
             FnEntry {
                 imp: FnImpl::Eval(f),
-                obj: Rc::new(Ref { name: name }),
+                obj: Rc::new(Ref { name }),
             },
         );
     }
@@ -81,7 +81,7 @@ impl<'f> Domain<'f> {
             name,
             FnEntry {
                 imp: FnImpl::Fn(f),
-                obj: Rc::new(Ref { name: name }),
+                obj: Rc::new(Ref { name }),
             },
         );
     }
@@ -91,7 +91,7 @@ impl<'f> Domain<'f> {
             name,
             FnEntry {
                 imp: FnImpl::Fun(f),
-                obj: Rc::new(Ref { name: name }),
+                obj: Rc::new(Ref { name }),
             },
         );
     }
@@ -101,7 +101,7 @@ impl<'f> Domain<'f> {
             name,
             FnEntry {
                 imp: FnImpl::FunMut(f),
-                obj: Rc::new(Ref { name: name }),
+                obj: Rc::new(Ref { name }),
             },
         );
     }
@@ -151,7 +151,7 @@ impl State {
             ),
             result: Binding {
                 name: "_".to_string(),
-                value: value,
+                value,
             },
         }
     }
@@ -171,7 +171,7 @@ impl<'m, 'f> Frame<'m, 'f> {
 /// Parse and evaluate a statement.  A derived state with the result value is
 /// returned.
 pub fn eval_stmt<'m>(domain: &'m mut Domain, state: State, s: &str) -> Result<State, String> {
-    if s.trim_start().len() == 0 {
+    if s.trim_start().is_empty() {
         return Ok(State {
             env: state.env,
             result: Binding {
@@ -186,7 +186,7 @@ pub fn eval_stmt<'m>(domain: &'m mut Domain, state: State, s: &str) -> Result<St
     let mut var = "_".to_string();
 
     let mut frame = Frame {
-        domain: domain,
+        domain,
         env: state.env.clone(),
     };
 
@@ -196,7 +196,7 @@ pub fn eval_stmt<'m>(domain: &'m mut Domain, state: State, s: &str) -> Result<St
         let head = stmt.downcast_ref::<Pair>().unwrap();
 
         if let Some(name) = head.0.downcast_ref::<Name>() {
-            if name.0.starts_with("!") {
+            if name.0.starts_with('!') {
                 if name.0.len() == 1 {
                     var = choose_name(&frame);
                 } else {
@@ -213,7 +213,7 @@ pub fn eval_stmt<'m>(domain: &'m mut Domain, state: State, s: &str) -> Result<St
                     }
                 } else {
                     // End of list.
-                    eval_name(&mut frame, "_")
+                    eval_name(&frame, "_")
                 }
             } else {
                 eval_toplevel_expr(&mut frame, &stmt)
@@ -236,8 +236,8 @@ pub fn eval_stmt<'m>(domain: &'m mut Domain, state: State, s: &str) -> Result<St
     Ok(State {
         env: new,
         result: Binding {
-            name: var.to_string(),
-            value: value,
+            name: var,
+            value,
         },
     })
 }
@@ -280,7 +280,7 @@ fn eval_call(frame: &mut Frame, list: &Pair) -> Option<Res> {
                     match eval_args(frame, &list.1) {
                         Ok(args) => match frame.lookup_ref(fref).unwrap().imp {
                             FnImpl::Fn(f) => f(&args),
-                            FnImpl::Fun(ref f) => f.invoke(&args),
+                            FnImpl::Fun(f) => f.invoke(&args),
                             FnImpl::FunMut(ref mut f) => f.invoke(&args),
                             _ => panic!(),
                         },
@@ -316,7 +316,7 @@ fn eval_name(frame: &Frame, s: &str) -> Res {
             return Ok(cdr(&binding).clone());
         }
 
-        level = cdr(&level);
+        level = cdr(level);
         if level.is::<()>() {
             break;
         }
@@ -329,12 +329,12 @@ fn eval_name(frame: &Frame, s: &str) -> Res {
     Err(s.to_string())
 }
 
-fn choose_name<'m, 'f>(frame: &Frame<'m, 'f>) -> String {
+fn choose_name(frame: &Frame) -> String {
     for i in 1.. {
         let mut s = String::new();
         s.push('$');
         s.push_str(&i.to_string());
-        if !eval_name(frame, &s).is_ok() {
+        if eval_name(frame, &s).is_err() {
             return s;
         }
     }
