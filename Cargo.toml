@@ -2,7 +2,7 @@
 name = "lep"
 version = "0.4.5"
 authors = ["Timo Savola <timo.savola@iki.fi>"]
-edition = "2018"
+edition = "2021"
 description = "Mini language for interactive consoles, featuring small code footprint."
 documentation = "https://docs.rs/lep"
 repository = "https://github.com/tsavola/lep"
