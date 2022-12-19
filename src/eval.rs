@@ -53,6 +53,12 @@ pub struct Domain<'f> {
     entries: HashMap<&'static str, FnEntry<'f>>,
 }
 
+impl<'f> Default for Domain<'f> {
+    fn default() -> Domain<'f> {
+        Self::new()
+    }
+}
+
 impl<'f> Domain<'f> {
     pub fn new() -> Self {
         Domain {
