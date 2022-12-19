@@ -120,6 +120,12 @@ pub struct State {
     pub result: Binding,
 }
 
+impl Default for State {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl State {
     pub fn new() -> Self {
         let nil = obj::nil();
