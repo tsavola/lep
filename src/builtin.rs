@@ -52,25 +52,20 @@ fn wrong_number_of_arguments() -> Res {
 
 /// Register all built-in functions.
 pub fn register(d: &mut Domain) {
-    register_and(d);
-    register_or(d);
-    register_apply(d);
-    register_add(d);
-    register_sub(d);
-    register_mul(d);
-    register_div(d);
-    register_car(d);
-    register_cdr(d);
-    register_cons(d);
-    register_list(d);
-    register_not(d);
-    register_identity(d);
-    register_env(d);
-}
-
-/// Register the special `and` form.
-pub fn register_and(d: &mut Domain) {
     d.register_eval("and", eval_and);
+    d.register_eval("or", eval_or);
+    d.register_eval("apply", eval_apply);
+    d.register("+", add);
+    d.register("-", sub);
+    d.register("*", mul);
+    d.register("/", div);
+    d.register("car", car);
+    d.register("cdr", cdr);
+    d.register("cons", cons);
+    d.register("list", list);
+    d.register("not", not);
+    d.register("identity", identity);
+    d.register_eval("env", env);
 }
 
 fn eval_and(frame: &mut Frame, args: &Obj) -> Res {
@@ -86,11 +81,6 @@ fn eval_and(frame: &mut Frame, args: &Obj) -> Res {
     }
 }
 
-/// Register the special `or` form.
-pub fn register_or(d: &mut Domain) {
-    d.register_eval("or", eval_or);
-}
-
 fn eval_or(frame: &mut Frame, args: &Obj) -> Res {
     if let Some(pair) = args.downcast_ref::<Pair>() {
         let x = eval_expr(frame, &pair.0)?;
@@ -102,11 +92,6 @@ fn eval_or(frame: &mut Frame, args: &Obj) -> Res {
     } else {
         Ok(obj::boolean(false))
     }
-}
-
-/// Register the special `apply` form.
-pub fn register_apply(d: &mut Domain) {
-    d.register_eval("apply", eval_apply);
 }
 
 fn eval_apply(frame: &mut Frame, args: &Obj) -> Res {
@@ -137,22 +122,12 @@ fn eval_apply(frame: &mut Frame, args: &Obj) -> Res {
     wrong_number_of_arguments()
 }
 
-/// Register the `+` function.
-pub fn register_add(d: &mut Domain) {
-    d.register("+", add);
-}
-
 /// The `+` function.
 pub fn add(args: &Obj) -> Res {
     match sum(0, args) {
         Some(n) => Ok(obj::int(n)),
         None => expected_i64(),
     }
-}
-
-/// Register the `-` function.
-pub fn register_sub(d: &mut Domain) {
-    d.register("-", sub);
 }
 
 /// The `-` function.
@@ -170,11 +145,6 @@ pub fn sub(args: &Obj) -> Res {
     } else {
         Ok(obj::int(0))
     }
-}
-
-/// Register the `*` function.
-pub fn register_mul(d: &mut Domain) {
-    d.register("*", mul);
 }
 
 /// The `*` function.
@@ -197,11 +167,6 @@ fn product(value: i64, list: &Obj) -> Option<i64> {
     }
 }
 
-/// Register the `/` function.
-pub fn register_div(d: &mut Domain) {
-    d.register("/", div);
-}
-
 /// The `/` function.
 pub fn div(args: &Obj) -> Res {
     if let Some(pair) = args.downcast_ref::<Pair>() {
@@ -219,11 +184,6 @@ pub fn div(args: &Obj) -> Res {
     wrong_number_of_arguments()
 }
 
-/// Register the `car` function.
-pub fn register_car(d: &mut Domain) {
-    d.register("car", car);
-}
-
 /// The `car` function.
 pub fn car(args: &Obj) -> Res {
     if let Some(list) = args.downcast_ref::<Pair>() {
@@ -237,11 +197,6 @@ pub fn car(args: &Obj) -> Res {
     }
 
     wrong_number_of_arguments()
-}
-
-/// Register the `cdr` function.
-pub fn register_cdr(d: &mut Domain) {
-    d.register("cdr", cdr);
 }
 
 /// The `cdr` function.
@@ -259,11 +214,6 @@ pub fn cdr(args: &Obj) -> Res {
     wrong_number_of_arguments()
 }
 
-/// Register the `cons` function.
-pub fn register_cons(d: &mut Domain) {
-    d.register("cons", cons);
-}
-
 /// The `cons` function.
 pub fn cons(args: &Obj) -> Res {
     if let Some(head) = args.downcast_ref::<Pair>() {
@@ -277,19 +227,9 @@ pub fn cons(args: &Obj) -> Res {
     wrong_number_of_arguments()
 }
 
-/// Register the `list` function.
-pub fn register_list(d: &mut Domain) {
-    d.register("list", list);
-}
-
 /// The `list` function.
 pub fn list(args: &Obj) -> Res {
     Ok(args.clone())
-}
-
-/// Register the `not` function.
-pub fn register_not(d: &mut Domain) {
-    d.register("not", not);
 }
 
 /// The `not` function.
@@ -303,11 +243,6 @@ pub fn not(args: &Obj) -> Res {
     wrong_number_of_arguments()
 }
 
-/// Register the `identity` function.
-pub fn register_identity(d: &mut Domain) {
-    d.register("identity", identity);
-}
-
 /// The `identity` function.
 pub fn identity(args: &Obj) -> Res {
     if let Some(pair) = args.downcast_ref::<Pair>() {
@@ -317,11 +252,6 @@ pub fn identity(args: &Obj) -> Res {
     }
 
     wrong_number_of_arguments()
-}
-
-/// Register the `env` function.
-pub fn register_env(d: &mut Domain) {
-    d.register_eval("env", env);
 }
 
 fn env(frame: &mut Frame, args: &Obj) -> Res {
@@ -340,8 +270,8 @@ mod tests {
     #[test]
     fn test_evaluators() {
         let mut d = Domain::new();
-        register_and(&mut d);
-        register_or(&mut d);
+        d.register_eval("and", eval_and);
+        d.register_eval("or", eval_or);
 
         let s = State::new();
 
