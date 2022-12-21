@@ -103,6 +103,7 @@ Built-in functions:
 (cons arg1 arg2)
 (list arg1 arg2 ...)
 (drop count list)
+(take count list)
 (env)
 ```
 

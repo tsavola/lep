@@ -66,6 +66,7 @@ pub fn register(d: &mut Domain) {
     d.register("drop", drop);
     d.register("list", list);
     d.register("not", not);
+    d.register("take", take);
     d.register_eval("and", eval_and);
     d.register_eval("apply", eval_apply);
     d.register_eval("env", env);
@@ -262,6 +263,39 @@ pub fn drop(args: &Obj) -> Res {
     wrong_number_of_arguments()
 }
 
+/// The `take` function.
+pub fn take(args: &Obj) -> Res {
+    if let Some(pair) = args.downcast_ref::<Pair>() {
+        if let Some(count) = pair.0.downcast_ref::<i64>() {
+            if *count < 0 {
+                return expected_nonnegative_count();
+            }
+
+            if let Some(pair) = pair.1.downcast_ref::<Pair>() {
+                if pair.1.is::<()>() {
+                    return take_n(*count, &pair.0);
+                }
+            }
+        } else {
+            return expected_i64();
+        }
+    }
+
+    wrong_number_of_arguments()
+}
+
+fn take_n(count: i64, list: &Obj) -> Res {
+    if count == 0 {
+        return Ok(obj::nil());
+    }
+
+    if let Some(pair) = list.downcast_ref::<Pair>() {
+        return Ok(obj::pair(pair.0.clone(), take_n(count-1, &pair.1)?));
+    }
+
+    expected_pair()
+}
+
 /// The `list` function.
 pub fn list(args: &Obj) -> Res {
     Ok(args.clone())
@@ -355,6 +389,35 @@ mod tests {
         assert!(s.result.value.is::<()>());
 
         let s = eval_stmt(&mut d, s, "(drop 5 (list 1 2 3 4 5 6))").unwrap();
+        assert!(s.result.value.is::<Pair>());
+    }
+
+    #[test]
+    fn test_take() {
+        let mut d = Domain::new();
+        d.register("list", list);
+        d.register("take", take);
+
+        let s = State::new();
+
+        assert!(eval_stmt(&mut d, State::new(), "(take)").is_err());
+
+        assert!(eval_stmt(&mut d, State::new(), "(take 0)").is_err());
+
+        assert!(eval_stmt(&mut d, State::new(), "(take false ())").is_err());
+
+        let s = eval_stmt(&mut d, s, "(take 0 ())").unwrap();
+        assert!(s.result.value.is::<()>());
+
+        let s = eval_stmt(&mut d, s, "(take 0 (list 1 2 3))").unwrap();
+        assert!(s.result.value.is::<()>());
+
+        assert!(eval_stmt(&mut d, State::new(), "(take 5 (list 1 2 3 4))").is_err());
+
+        let s = eval_stmt(&mut d, s, "(take 5 (list 1 2 3 4 5))").unwrap();
+        assert!(s.result.value.is::<Pair>());
+
+        let s = eval_stmt(&mut d, s, "(take 5 (list 1 2 3 4 5 6))").unwrap();
         assert!(s.result.value.is::<Pair>());
     }
 }
