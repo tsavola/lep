@@ -64,7 +64,6 @@ pub fn register(d: &mut Domain) {
     d.register("cons", cons);
     d.register("list", list);
     d.register("not", not);
-    d.register("identity", identity);
     d.register_eval("env", env);
 }
 
@@ -237,17 +236,6 @@ pub fn not(args: &Obj) -> Res {
     if let Some(pair) = args.downcast_ref::<Pair>() {
         if pair.1.is::<()>() {
             return Ok(obj::boolean(!is_truthful(&pair.0)));
-        }
-    }
-
-    wrong_number_of_arguments()
-}
-
-/// The `identity` function.
-pub fn identity(args: &Obj) -> Res {
-    if let Some(pair) = args.downcast_ref::<Pair>() {
-        if pair.1.is::<()>() {
-            return Ok(pair.0.clone());
         }
     }
 

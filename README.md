@@ -72,14 +72,7 @@ The statement syntax is optimized for two-step usage:
   2. Decide whether the result is worth remembering!
 
 An expression without outer parentheses evaluates a variable/literal or invokes
-a function depending on the type of the first term.  Therefore it's not
-possible to directly get a reference to a function.  However, the built-in
-`identity` function can be used to work around that:
-
-    >> identity echo
-    <function echo>
-    >> _ "bar"
-    bar
+a function depending on the type of the first term.
 
 When the first term is a variable or a literal and there are multiple terms,
 the expression is quoted:
@@ -109,7 +102,6 @@ Built-in functions:
 (cons arg1 arg2)
 (list arg1 arg2 ...)
 (not arg)
-(identity arg)
 (env)
 ```
 
