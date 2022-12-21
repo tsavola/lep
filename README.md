@@ -92,6 +92,7 @@ Built-in functions:
 ```scheme
 (and arg1 arg2 ...)
 (or arg1 arg2 ...)
+(not arg)
 (apply function arguments)
 (+ arg1 arg2 ...)
 (- arg1 arg2 ...)
@@ -101,7 +102,7 @@ Built-in functions:
 (cdr arg)
 (cons arg1 arg2)
 (list arg1 arg2 ...)
-(not arg)
+(drop count list)
 (env)
 ```
 
