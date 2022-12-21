@@ -102,8 +102,8 @@ Built-in functions:
 (cdr arg)
 (cons arg1 arg2)
 (list arg1 arg2 ...)
-(drop count list)
-(take count list)
+(drop list count)
+(take list count)
 (env)
 ```
 

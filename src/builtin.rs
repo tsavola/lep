@@ -38,16 +38,16 @@ fn sum(value: i64, list: &Obj) -> Option<i64> {
     }
 }
 
-fn expected_nonnegative_count() -> Res {
-    Err("function expects nonnegative count".to_string())
-}
-
 fn expected_i64() -> Res {
-    Err("arithmetic function expects i64".to_string())
+    Err("expected i64".to_string())
 }
 
 fn expected_pair() -> Res {
-    Err("function expects cons pair as argument".to_string())
+    Err("expected cons cell".to_string())
+}
+
+fn expected_list() -> Res {
+    Err("expected list".to_string())
 }
 
 fn wrong_number_of_arguments() -> Res {
@@ -234,29 +234,25 @@ pub fn cons(args: &Obj) -> Res {
 
 /// The `drop` function.
 pub fn drop(args: &Obj) -> Res {
-    if let Some(pair) = args.downcast_ref::<Pair>() {
-        if let Some(count) = pair.0.downcast_ref::<i64>() {
-            if *count < 0 {
-                return expected_nonnegative_count();
-            }
-
-            if let Some(pair) = pair.1.downcast_ref::<Pair>() {
-                if pair.1.is::<()>() {
-                    let mut res = &pair.0;
+    if let Some(args0) = args.downcast_ref::<Pair>() {
+        if let Some(args1) = args0.1.downcast_ref::<Pair>() {
+            if args1.1.is::<()>() {
+                if let Some(count) = args1.0.downcast_ref::<i64>() {
+                    let mut list = &args0.0;
 
                     for _ in 0..*count {
-                        if let Some(pair) = res.downcast_ref::<Pair>() {
-                            res = &pair.1;
+                        if let Some(pair) = list.downcast_ref::<Pair>() {
+                            list = &pair.1;
                         } else {
-                            return expected_pair();
+                            return expected_list();
                         }
                     }
 
-                    return Ok(res.clone());
+                    return Ok(list.clone());
                 }
+
+                return expected_i64();
             }
-        } else {
-            return expected_i64();
         }
     }
 
@@ -265,35 +261,31 @@ pub fn drop(args: &Obj) -> Res {
 
 /// The `take` function.
 pub fn take(args: &Obj) -> Res {
-    if let Some(pair) = args.downcast_ref::<Pair>() {
-        if let Some(count) = pair.0.downcast_ref::<i64>() {
-            if *count < 0 {
-                return expected_nonnegative_count();
-            }
-
-            if let Some(pair) = pair.1.downcast_ref::<Pair>() {
-                if pair.1.is::<()>() {
-                    return take_n(*count, &pair.0);
+    if let Some(args0) = args.downcast_ref::<Pair>() {
+        if let Some(args1) = args0.1.downcast_ref::<Pair>() {
+            if args1.1.is::<()>() {
+                if let Some(count) = args1.0.downcast_ref::<i64>() {
+                    return take_count(&args0.0, *count);
                 }
+
+                return expected_i64();
             }
-        } else {
-            return expected_i64();
         }
     }
 
     wrong_number_of_arguments()
 }
 
-fn take_n(count: i64, list: &Obj) -> Res {
-    if count == 0 {
+fn take_count(list: &Obj, count: i64) -> Res {
+    if count <= 0 {
         return Ok(obj::nil());
     }
 
     if let Some(pair) = list.downcast_ref::<Pair>() {
-        return Ok(obj::pair(pair.0.clone(), take_n(count-1, &pair.1)?));
+        return Ok(obj::pair(pair.0.clone(), take_count(&pair.1, count - 1)?));
     }
 
-    expected_pair()
+    expected_list()
 }
 
 /// The `list` function.
@@ -376,19 +368,19 @@ mod tests {
 
         assert!(eval_stmt(&mut d, State::new(), "(drop)").is_err());
 
-        assert!(eval_stmt(&mut d, State::new(), "(drop 0)").is_err());
+        assert!(eval_stmt(&mut d, State::new(), "(drop ())").is_err());
 
-        assert!(eval_stmt(&mut d, State::new(), "(drop false ())").is_err());
+        assert!(eval_stmt(&mut d, State::new(), "(drop () false)").is_err());
 
-        let s = eval_stmt(&mut d, s, "(drop 0 ())").unwrap();
+        let s = eval_stmt(&mut d, s, "(drop () 0)").unwrap();
         assert!(s.result.value.is::<()>());
 
-        assert!(eval_stmt(&mut d, State::new(), "(drop 5 (list 1 2 3 4))").is_err());
+        assert!(eval_stmt(&mut d, State::new(), "(drop (list 1 2 3 4) 5)").is_err());
 
-        let s = eval_stmt(&mut d, s, "(drop 5 (list 1 2 3 4 5))").unwrap();
+        let s = eval_stmt(&mut d, s, "(drop (list 1 2 3 4 5) 5)").unwrap();
         assert!(s.result.value.is::<()>());
 
-        let s = eval_stmt(&mut d, s, "(drop 5 (list 1 2 3 4 5 6))").unwrap();
+        let s = eval_stmt(&mut d, s, "(drop (list 1 2 3 4 5 6) 5)").unwrap();
         assert!(s.result.value.is::<Pair>());
     }
 
@@ -402,22 +394,22 @@ mod tests {
 
         assert!(eval_stmt(&mut d, State::new(), "(take)").is_err());
 
-        assert!(eval_stmt(&mut d, State::new(), "(take 0)").is_err());
+        assert!(eval_stmt(&mut d, State::new(), "(take ())").is_err());
 
-        assert!(eval_stmt(&mut d, State::new(), "(take false ())").is_err());
+        assert!(eval_stmt(&mut d, State::new(), "(take () false)").is_err());
 
-        let s = eval_stmt(&mut d, s, "(take 0 ())").unwrap();
+        let s = eval_stmt(&mut d, s, "(take () 0)").unwrap();
         assert!(s.result.value.is::<()>());
 
-        let s = eval_stmt(&mut d, s, "(take 0 (list 1 2 3))").unwrap();
+        let s = eval_stmt(&mut d, s, "(take (list 1 2 3) 0)").unwrap();
         assert!(s.result.value.is::<()>());
 
-        assert!(eval_stmt(&mut d, State::new(), "(take 5 (list 1 2 3 4))").is_err());
+        assert!(eval_stmt(&mut d, State::new(), "(take (list 1 2 3 4) 5)").is_err());
 
-        let s = eval_stmt(&mut d, s, "(take 5 (list 1 2 3 4 5))").unwrap();
+        let s = eval_stmt(&mut d, s, "(take (list 1 2 3 4 5) 5)").unwrap();
         assert!(s.result.value.is::<Pair>());
 
-        let s = eval_stmt(&mut d, s, "(take 5 (list 1 2 3 4 5 6))").unwrap();
+        let s = eval_stmt(&mut d, s, "(take (list 1 2 3 4 5 6) 5)").unwrap();
         assert!(s.result.value.is::<Pair>());
     }
 }
