@@ -1,6 +1,6 @@
 [package]
 name = "lep"
-version = "0.4.5"
+version = "0.5.0"
 authors = ["Timo Savola <timo.savola@iki.fi>"]
 edition = "2021"
 description = "Mini language for interactive consoles, featuring small code footprint."
